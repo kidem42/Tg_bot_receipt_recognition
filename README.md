@@ -156,3 +156,13 @@ This project uses the following open-source libraries:
 - pdf2image (>=1.16.0) - MIT
 
 Full license texts for these dependencies can be found in the `licenses` directory.
+
+License
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
+
+What this means for you:
+
+You can freely use, modify, and distribute this software
+If you distribute modified versions, they must also be under the GPL v3
+You must include the original copyright notice and license
+The full license text is available at gnu.org/licenses/gpl-3.0

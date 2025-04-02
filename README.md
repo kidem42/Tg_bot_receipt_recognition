@@ -141,6 +141,22 @@ python main.py
 - Maximum PDF pages processed at once: 5 (configurable in `config.py`)
 - Video and audio files are not supported
 
+## Dependencies
+
+This project uses the following open-source libraries:
+
+- python-telegram-bot (>=13.0) - LGPL-3.0
+- openai (>=1.0.0) - MIT
+- google-auth (>=2.0.0) - Apache-2.0
+- google-api-python-client (>=2.0.0) - Apache-2.0
+- python-dotenv (>=0.19.0) - BSD-3-Clause
+- requests (>=2.25.0) - Apache-2.0
+- Pillow (>=9.0.0) - HPND
+- pillow-heif (>=0.10.0) - BSD-3-Clause
+- pdf2image (>=1.16.0) - MIT
+
+Full license texts for these dependencies can be found in the `licenses` directory.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 (GPLv3) - see the [LICENSE](LICENSE) file for details.

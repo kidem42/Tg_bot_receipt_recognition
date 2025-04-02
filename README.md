@@ -158,11 +158,12 @@ This project uses the following open-source libraries:
 Full license texts for these dependencies can be found in the `licenses` directory.
 
 License
-This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
+This project is licensed under the Apache License, Version 2.0 - see the LICENSE file for details.
 
 What this means for you:
 
 You can freely use, modify, and distribute this software
-If you distribute modified versions, they must also be under the GPL v3
+You can use the software for commercial purposes
 You must include the original copyright notice and license
-The full license text is available at gnu.org/licenses/gpl-3.0
+You must state significant changes made to the software
+The full license text is available at http://www.apache.org/licenses/LICENSE-2.0

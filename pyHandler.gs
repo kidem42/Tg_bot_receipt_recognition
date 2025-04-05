@@ -1,5 +1,41 @@
 //pyHandler.gs
 
+// Column configuration (enable/disable columns)
+const COLUMN_CONFIG = {
+  "Date": true,
+  "Time": true,
+  "Items": true,
+  "Amount": true,
+  "Currency": true,
+  "Amount in USD": true,
+  "Recipt": true,
+  "User ID": true,
+  "User Name": true,
+  "Timestamp": true
+};
+
+// Column order definition
+const COLUMN_ORDER = [
+  "Date",
+  "Time",
+  "Items",
+  "Amount",
+  "Currency",
+  "Amount in USD",
+  "Recipt",
+  "User ID",
+  "User Name",
+  "Timestamp"
+];
+
+// Column mapping from old to new names
+const COLUMN_MAPPING = {
+  "Telegram User ID": "User ID",
+  "Telegram Username": "User Name",
+  "Total Amount": "Amount",
+  "Image URL": "Recipt"
+};
+
 // Helper function to convert bytes to hex
 function byteArrayToHex(bytes) {
   var hexString = '';
@@ -367,6 +403,125 @@ function getFolderByName(parentFolderId, folderName) {
   }
 }
 
+
+// Find column index by header name
+function findColumnByHeader(sheet, headerName) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  return headers.indexOf(headerName) + 1; // +1 because indices are 1-based in Sheets
+}
+
+// Create or get column by header name
+function getOrCreateColumn(sheet, headerName) {
+  let colIndex = findColumnByHeader(sheet, headerName);
+  
+  // If column doesn't exist, create it
+  if (colIndex === 0) {
+    // Add the new column at the end
+    colIndex = sheet.getLastColumn() + 1;
+    sheet.getRange(1, colIndex).setValue(headerName);
+    sheet.getRange(1, colIndex).setFontWeight("bold");
+  }
+  
+  return colIndex;
+}
+
+// Ensure columns are in the correct order
+function ensureColumnOrder(sheet) {
+  // Get current headers
+  const lastCol = sheet.getLastColumn();
+  const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  
+  // Create a map of header name to column index
+  const headerMap = {};
+  currentHeaders.forEach((header, index) => {
+    if (header) {
+      // Check if this is an old header name that needs to be updated
+      if (COLUMN_MAPPING[header]) {
+        headerMap[COLUMN_MAPPING[header]] = index + 1;
+        // Update the header name in the sheet
+        sheet.getRange(1, index + 1).setValue(COLUMN_MAPPING[header]);
+      } else {
+        headerMap[header] = index + 1;
+      }
+    }
+  });
+  
+  // Check if all required columns exist and are in the right order
+  let needsReordering = false;
+  let lastFoundIndex = 0;
+  
+  for (const header of COLUMN_ORDER) {
+    if (!COLUMN_CONFIG[header]) continue; // Skip disabled columns
+    
+    const currentIndex = headerMap[header];
+    if (!currentIndex) {
+      // Column doesn't exist, will be created later
+      needsReordering = true;
+      break;
+    }
+    
+    if (currentIndex <= lastFoundIndex && lastFoundIndex > 0) {
+      // Column exists but is out of order
+      needsReordering = true;
+      break;
+    }
+    
+    lastFoundIndex = currentIndex;
+  }
+  
+  if (needsReordering) {
+    // Create a new sheet with the correct order
+    const tempSheetName = "TempExpenses_" + new Date().getTime();
+    const ss = sheet.getParent();
+    const tempSheet = ss.insertSheet(tempSheetName);
+    
+    // Add headers in the correct order
+    const newHeaders = COLUMN_ORDER.filter(header => COLUMN_CONFIG[header]);
+    tempSheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+    tempSheet.getRange(1, 1, 1, newHeaders.length).setFontWeight("bold");
+    
+    // Copy data if there's any
+    if (sheet.getLastRow() > 1) {
+      // For each row in the original sheet
+      for (let row = 2; row <= sheet.getLastRow(); row++) {
+        const newRowData = [];
+        
+        // For each header in the new order
+        for (const header of newHeaders) {
+          // Check if this is a new header name that was mapped from an old one
+          let oldHeader = header;
+          for (const [oldName, newName] of Object.entries(COLUMN_MAPPING)) {
+            if (newName === header) {
+              oldHeader = oldName;
+              break;
+            }
+          }
+          
+          const oldColIndex = headerMap[header] || findColumnByHeader(sheet, oldHeader);
+          if (oldColIndex) {
+            // Copy data from old column
+            newRowData.push(sheet.getRange(row, oldColIndex).getValue());
+          } else {
+            // New column, no data
+            newRowData.push("");
+          }
+        }
+        
+        // Add row to temp sheet
+        tempSheet.appendRow(newRowData);
+      }
+    }
+    
+    // Delete the old sheet and rename the temp sheet
+    ss.deleteSheet(sheet);
+    tempSheet.setName("Expenses");
+    
+    return tempSheet;
+  }
+  
+  return sheet;
+}
+
 // Create expense record in spreadsheet
 function createExpenseRecord(data) {
   try {
@@ -392,24 +547,16 @@ function createExpenseRecord(data) {
         // Create a new sheet if it doesn't exist
         sheet = ss.insertSheet("Expenses");
         
-        // Add headers
-        sheet.appendRow([
-          "ID", 
-          "Telegram User ID", 
-          "Telegram Username", 
-          "Total Amount", 
-          "Tax Amount", 
-          "Currency", 
-          "Date", 
-          "Time", 
-          "Items", 
-          "Image URL", 
-          "Timestamp"
-        ]);
+        // Add headers based on the enabled columns in the configuration
+        const headers = COLUMN_ORDER.filter(header => COLUMN_CONFIG[header]);
+        sheet.appendRow(headers);
         
         // Format headers
-        sheet.getRange(1, 1, 1, 11).setFontWeight("bold");
+        sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
         // logToSheet("Created new Expenses sheet", "INFO");
+      } else {
+        // Ensure the sheet has the correct column order and headers
+        sheet = ensureColumnOrder(sheet);
       }
     } catch (e) {
       // logToSheet("Failed to access or create Expenses sheet: " + e.toString(), "ERROR");
@@ -420,31 +567,44 @@ function createExpenseRecord(data) {
       };
     }
     
-    // Generate unique ID for the record
-    var recordId = Utilities.getUuid();
-    
     // Get current timestamp
     var timestamp = new Date().toISOString();
     
-    // Add data to the table
-    sheet.appendRow([
-      recordId,
-      data.telegram_user_id,
-      data.telegram_username,
-      data.total_amount,
-      data.tax_amount,
-      data.currency,
-      data.date,
-      data.time,
-      data.items,
-      data.image_url,
-      timestamp
-    ]);
+    // Prepare row data based on enabled columns
+    var rowData = {};
     
-    // logToSheet("Expense record created successfully: " + recordId, "INFO");
+    // Map the data to the new column names
+    if (COLUMN_CONFIG["User ID"]) rowData["User ID"] = data.telegram_user_id;
+    if (COLUMN_CONFIG["User Name"]) rowData["User Name"] = data.telegram_username;
+    if (COLUMN_CONFIG["Amount"]) rowData["Amount"] = data.total_amount;
+    if (COLUMN_CONFIG["Currency"]) rowData["Currency"] = data.currency;
+    if (COLUMN_CONFIG["Date"]) rowData["Date"] = data.date;
+    if (COLUMN_CONFIG["Time"]) rowData["Time"] = data.time;
+    if (COLUMN_CONFIG["Items"]) rowData["Items"] = data.items;
+    if (COLUMN_CONFIG["Recipt"]) rowData["Recipt"] = data.image_url;
+    if (COLUMN_CONFIG["Timestamp"]) rowData["Timestamp"] = timestamp;
+    // Amount in USD is for manual entry, so we just create the column
+    
+    // Create a new row
+    var newRow = [];
+    
+    // Add values in the correct order
+    for (const header of COLUMN_ORDER) {
+      if (COLUMN_CONFIG[header]) {
+        // Get or create the column
+        getOrCreateColumn(sheet, header);
+        
+        // Add the value to the row (or empty string if not available)
+        newRow.push(rowData[header] || "");
+      }
+    }
+    
+    // Add the row to the sheet
+    sheet.appendRow(newRow);
+    
+    // logToSheet("Expense record created successfully", "INFO");
     return { 
       success: true, 
-      recordId: recordId,
       message: "Expense record created successfully"
     };
   } catch (error) {

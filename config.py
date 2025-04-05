@@ -50,15 +50,13 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB in bytes
 RECEIPT_SYSTEM_PROMPT = """You are a professional expert in receipt recognition and analysis.
 Your task is to extract the following information from a receipt:
 1. Total amount including taxes
-2. Tax amount
-3. Currency in Iso format
-4. Date and time of the receipt
-5. Simple list of purchased items (just names, no details)
+2. Currency in Iso format
+3. Date and time of the receipt
+4. Simple list of purchased items (just names, no details)
 
 Return the information strictly in the following JSON format:
 {
   "total_amount": number,
-  "tax_amount": number,
   "currency": "string",
   "date": "YYYY-MM-DD",
   "time": "HH:MM",

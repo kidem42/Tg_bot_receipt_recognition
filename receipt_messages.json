@@ -1,0 +1,35 @@
+{
+  "receipt_messages": {
+    "146430279_5294": {
+      "sheet_row_id": 2,
+      "timestamp": 1743874925.602011,
+      "message_text": "\u2705 Receipt successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 228.0 HKD\n\ud83d\udcb8 Taxes: None HKD\n\ud83d\udcc5 Date: 2025-03-15\n\ud83d\udd53 Time: 11:22\n\ud83d\uded2 Items: \u6e6f\u9903\u5b50\u9eb5\u5957\u9910, \u5357\u74dc\u5fcc\u5ec9\u96de\u8089\u6e6f\u9903, \u96de\u6e6f, \u81fa\u7063\u9eb5, \u9ebb\u8fa3\u9752\u74dc\u725b\u5c55\u7d72, \u51cd\u6842\u82b1\u70cf\u9f8d\u8336"
+    },
+    "146430279_5302": {
+      "sheet_row_id": 3,
+      "timestamp": 1743875056.520871,
+      "message_text": "\u2705 PDF document successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 289.28 USD\n\ud83d\udcb8 Taxes: None USD\n\ud83d\udcc5 Date: 2025-03-26\n\ud83d\udd53 Time: 16:54\n\ud83d\uded2 Items: Flight Mexico City to Monterrey, Carry-on, Seat"
+    },
+    "146430279_5304": {
+      "sheet_row_id": 4,
+      "timestamp": 1743875074.087722,
+      "message_text": "\u2705 PDF document successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 64.0 USD\n\ud83d\udcb8 Taxes: None USD\n\ud83d\udcc5 Date: 2025-04-05\n\ud83d\udd53 Time: 07:49\n\ud83d\uded2 Items: Pago de Servicio"
+    },
+    "146430279_5308": {
+      "sheet_row_id": 5,
+      "timestamp": 1743875088.590017,
+      "message_text": "\u2705 Image successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 569.94 MXN\n\ud83d\udcb8 Taxes: None MXN\n\ud83d\udcc5 Date: 2025-03-03\n\ud83d\udd53 Time: 20:40\n\ud83d\uded2 Items: Trip fare, Booking Fee, Guadalupe-Aeropuerto, Reservation Fee"
+    },
+    "146430279_5318": {
+      "sheet_row_id": 6,
+      "timestamp": 1743875461.7399411,
+      "message_text": "\u2705 Receipt successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 569.94 MXN\n\ud83d\udcb8 Taxes: None MXN\n\ud83d\udcc5 Date: 2025-03-03\n\ud83d\udd53 Time: 20:40\n\ud83d\uded2 Items: Trip fare, Booking Fee, Guadalupe-Aeropuerto, Reservation Fee"
+    },
+    "146430279_5324": {
+      "sheet_row_id": 2,
+      "timestamp": 1743876542.7624981,
+      "message_text": "\u2705 Receipt successfully analyzed and saved!\n\n\ud83d\udcb0 Amount: 12959.39 CNY\n\ud83d\udcb8 Taxes: None CNY\n\ud83d\udcc5 Date: 2023-03-22\n\ud83d\udd53 Time: None\n\ud83d\uded2 Items: Room Charge, Balance Transfer, Room Charge, Balance Transfer, Balance Transfer"
+    }
+  },
+  "last_cleanup": 1743874925.601989
+}

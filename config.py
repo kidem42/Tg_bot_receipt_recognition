@@ -7,12 +7,12 @@ load_dotenv()
 # User groups for routing
 ALLOWED_USERS_0 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_0", "").split(",") if id.strip()]  # First user group
 ALLOWED_USERS_1 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_1", "").split(",") if id.strip()]  # Second user group
-# ALLOWED_USERS_2 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_2", "").split(",") if id.strip()]  # Third user group
+#ALLOWED_USERS_2 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_2", "").split(",") if id.strip()]  # Third user group
 
 # Main settings - Root folder IDs on Google Drive
 MAIN_FOLDER_ID_0 = os.getenv("MAIN_FOLDER_ID_0")  # Root folder ID for group 0
 MAIN_FOLDER_ID_1 = os.getenv("MAIN_FOLDER_ID_1")  # Root folder ID for group 1
-# MAIN_FOLDER_ID_2 = os.getenv("MAIN_FOLDER_ID_2")  # Root folder ID for group 2
+#MAIN_FOLDER_ID_2 = os.getenv("MAIN_FOLDER_ID_2")  # Root folder ID for group 2
 
 # API keys
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -22,7 +22,7 @@ GOOGLE_SCRIPT_API_KEY = os.getenv("GOOGLE_SCRIPT_API_KEY")
 # Google Script URLs for different groups
 GOOGLE_SCRIPT_URL_0 = os.getenv("GOOGLE_SCRIPT_URL_0")  # URL for group 0
 GOOGLE_SCRIPT_URL_1 = os.getenv("GOOGLE_SCRIPT_URL_1")  # URL for group 1
-# GOOGLE_SCRIPT_URL_2 = os.getenv("GOOGLE_SCRIPT_URL_2")  # URL for group 2
+#GOOGLE_SCRIPT_URL_2 = os.getenv("GOOGLE_SCRIPT_URL_2")  # URL for group 2
 
 MAX_PDF_PAGES = 5  # Maximum number of PDF pages to analyze in one request
 
@@ -69,3 +69,8 @@ Be precise and accurate in extracting the information."""
 
 # User prompt for receipt analysis
 RECEIPT_USER_PROMPT = """Analyze this receipt and extract all required information in the structured format."""
+
+# Receipt message tracking settings
+MESSAGES_TRACKING_FILE = "receipt_messages.json"  # Path to temporary file
+MAX_RECORD_AGE = 14 * 24 * 60 * 60  # Maximum time to keep records (14 days in seconds)
+CLEANUP_INTERVAL = 3 * 24 * 60 * 60  # Cleanup check interval (3 days in seconds)

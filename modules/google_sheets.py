@@ -35,7 +35,6 @@ def create_expense_record(user_id, username, receipt_data, file_url):
         "telegram_user_id": user_id,
         "telegram_username": username,
         "total_amount": receipt_data.get("total_amount"),
-        "tax_amount": receipt_data.get("tax_amount"),
         "currency": receipt_data.get("currency"),
         "date": receipt_data.get("date"),
         "time": receipt_data.get("time"),

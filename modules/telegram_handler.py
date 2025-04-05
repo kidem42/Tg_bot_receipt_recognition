@@ -48,7 +48,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👋 Hello, {update.effective_user.first_name}! I'm your Receipt Bot!\n\n"
             f"📝 I can help you:\n"
             f"• 📸 Upload and organize photos\n"
-            f"• 📄 Process documents\n"
+            f"• 📄 Process PDF documents\n"
             f"• 🧾 Analyze receipts automatically\n"
             f"• 📊 Track expenses in Google Sheets\n\n"
             f"📤 All files are stored in Google Drive folder.\n"

@@ -25,6 +25,7 @@ var/
 venv/
 .venv/
 ENV/
+scripts/
 
 # Jupyter Notebook
 .ipynb_checkpoints

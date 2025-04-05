@@ -6,16 +6,29 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 ## Features
 - Upload photos and document files (PDFs, images) via Telegram
 - Automatic receipt information extraction:
-  - Total amount and taxes
+  - Total amount
   - Currency
   - Date and time
-  - List of purchased items (symply listed with no strong focus on that part)
+  - List of purchased items (simply listed with no strong focus on that part)
 - Multi-page PDF document support
 - Image conversion from various formats to ones compatible with OpenAI's API
 - Document storage in Google Drive with user-specific folders based on telegram user ID in the name 
-- Structured data storage in Google Sheets
+- Structured data storage in Google Sheets with configurable columns
 - User permission system with group-based access control
 - Secure API communication with Google Apps Script
+
+## Recent Updates
+- Removed "Tax Amount" field from the OpenAI prompt and data processing
+- Removed "ID" column from the spreadsheet
+- Added "Amount in USD" column for manual entry
+- Renamed columns for better clarity:
+  - "Telegram User ID" → "User ID"
+  - "Telegram Username" → "User Name"
+  - "Total Amount" → "Amount"
+  - "Image URL" → "Recipt"
+- Reordered columns to a specific sequence
+- Improved column handling to work by header name instead of column index
+- Added configuration to enable/disable columns
 
 ## Architecture
 

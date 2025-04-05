@@ -10,6 +10,9 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
   - Currency
   - Date and time
   - List of purchased items (simply listed with no strong focus on that part)
+- Add notes to receipts by replying to the bot's messages
+- Notes are stored in Google Sheets alongside receipt data
+- Automatic cleanup of old message tracking records (after 14 days)
 - Multi-page PDF document support
 - Image conversion from various formats to ones compatible with OpenAI's API
 - Document storage in Google Drive with user-specific folders based on telegram user ID in the name 
@@ -18,6 +21,10 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - Secure API communication with Google Apps Script
 
 ## Recent Updates
+- Added receipt notes functionality allowing users to add context to receipts by replying to bot messages
+- Implemented message tracking system for associating notes with receipts
+- Added "Notes" column to the spreadsheet
+- Added automatic cleanup of old message tracking records (after 14 days)
 - Removed "Tax Amount" field from the OpenAI prompt and data processing
 - Removed "ID" column from the spreadsheet
 - Added "Amount in USD" column for manual entry
@@ -49,6 +56,8 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - `telegram_handler.py`: Handles Telegram bot interactions and commands
 - `google_sheets.py`: Manages the creation of records in Google Sheets
 - `file_processor.py`: Coordinates the file processing workflow
+- `message_tracker.py`: Tracks message IDs and their associated receipt records
+- `receipt_notes.py`: Handles receipt notes functionality and message registration
 
 ### Google Apps Script Component
 - `pyHandler.gs`: Google Apps Script web app that handles Drive/Sheets operations
@@ -139,7 +148,10 @@ python main.py
 - Send a photo of a receipt directly to the bot
 - Send a document (PDF or image) containing receipt information
 - The bot will process the image, extract receipt data, and respond with the extracted information
+- To add notes to a receipt, simply reply to the bot's message containing the receipt details
+- The bot will confirm that your note has been added with a "✅ Note added successfully to the receipt!" message
 - All files are stored in your Google Drive, and receipt data is recorded in Google Sheets
+- Notes can be added up to 14 days after uploading a receipt
 
 ## Security
 

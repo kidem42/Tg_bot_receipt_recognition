@@ -1,5 +1,12 @@
 //pyHandler.gs
 
+// General configuration
+const GENERAL_CONFIG = {
+  "insertAtTop": true,  // Set to true to insert new records at the top, false to insert at the bottom
+  "use12HourFormat": true,  // Set to true for AM/PM format, false for 24-hour format
+  "apiKey": "GOOGLE_SCRIPT_API_KEY"  // API key for security checks
+};
+
 // Column configuration (enable/disable columns)
 const COLUMN_CONFIG = {
   "Date": true,
@@ -107,7 +114,7 @@ function doPost(e) {
     // logToSheet("Using security headers - API Key: " + apiKey.substring(0, 5) + "..., Timestamp: " + timestamp + ", Signature: " + signature.substring(0, 10) + "...", "INFO");
     
     // API key check
-    if (apiKey !== 'GOOGLE_SCRIPT_API_KEY') {
+    if (apiKey !== GENERAL_CONFIG.apiKey) {
       // logToSheet("Invalid API key: " + apiKey, "ERROR");
       return ContentService.createTextOutput(JSON.stringify({ 
         error: "Invalid API key",
@@ -583,7 +590,6 @@ function createExpenseRecord(data) {
     if (COLUMN_CONFIG["Items"]) rowData["Items"] = data.items;
     if (COLUMN_CONFIG["Recipt"]) rowData["Recipt"] = data.image_url;
     if (COLUMN_CONFIG["Timestamp"]) rowData["Timestamp"] = timestamp;
-    // Amount in USD is for manual entry, so we just create the column
     
     // Create a new row
     var newRow = [];
@@ -599,8 +605,52 @@ function createExpenseRecord(data) {
       }
     }
     
-    // Add the row to the sheet
-    sheet.appendRow(newRow);
+    // Insert the row at the top or bottom based on configuration
+    if (GENERAL_CONFIG.insertAtTop) {
+      // Insert after the header row
+      sheet.insertRowAfter(1);
+      const newRowRange = sheet.getRange(2, 1, 1, newRow.length);
+      newRowRange.setValues([newRow]);
+      
+      // Reset formatting for the new row
+      newRowRange.setFontWeight("normal");
+      
+      // Apply formatting to date and time columns
+      const dateColIndex = findColumnByHeader(sheet, "Date");
+      const timeColIndex = findColumnByHeader(sheet, "Time");
+      
+      if (dateColIndex > 0) {
+        sheet.getRange(2, dateColIndex).setNumberFormat("d mmm yyyy г.");
+      }
+      
+      if (timeColIndex > 0) {
+        if (GENERAL_CONFIG.use12HourFormat) {
+          sheet.getRange(2, timeColIndex).setNumberFormat("h:mm AM/PM");
+        } else {
+          sheet.getRange(2, timeColIndex).setNumberFormat("HH:mm");
+        }
+      }
+    } else {
+      // Append at the bottom (default behavior)
+      const lastRow = sheet.getLastRow() + 1;
+      sheet.appendRow(newRow);
+      
+      // Apply formatting to date and time columns
+      const dateColIndex = findColumnByHeader(sheet, "Date");
+      const timeColIndex = findColumnByHeader(sheet, "Time");
+      
+      if (dateColIndex > 0) {
+        sheet.getRange(lastRow, dateColIndex).setNumberFormat("d mmm yyyy г.");
+      }
+      
+      if (timeColIndex > 0) {
+        if (GENERAL_CONFIG.use12HourFormat) {
+          sheet.getRange(lastRow, timeColIndex).setNumberFormat("h:mm AM/PM");
+        } else {
+          sheet.getRange(lastRow, timeColIndex).setNumberFormat("HH:mm");
+        }
+      }
+    }
     
     // logToSheet("Expense record created successfully", "INFO");
     return { 

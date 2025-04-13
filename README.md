@@ -29,6 +29,9 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - Reordered columns to a specific sequence
 - Improved column handling to work by header name instead of column index
 - Added configuration to enable/disable columns
+- Added configuration to insert new records at the top of the sheet (insertAtTop)
+- Added configuration for time format (12-hour or 24-hour format)
+
 
 ## Architecture
 

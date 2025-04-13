@@ -21,6 +21,8 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - Secure API communication with Google Apps Script
 
 ## Recent Updates
+- Added option to insert new records at the top of the spreadsheet (insertAtTop configuration)
+- Added date and time formatting options (use12HourFormat configuration)
 - Added receipt notes functionality allowing users to add context to receipts by replying to bot messages
 - Implemented message tracking system for associating notes with receipts
 - Added "Notes" column to the spreadsheet
@@ -110,13 +112,16 @@ MAIN_FOLDER_ID_0=your_folder_id_for_group_0
 2. Open the Script Editor (Extensions → Apps Script)
 3. Copy the content of `pyHandler.gs` into the editor
 4. Replace the placeholder `'GOOGLE_SCRIPT_API_KEY'` with the same key you specified in your `.env` file
-5. Deploy the script as a web app:
+5. Configure the Google Apps Script settings (optional):
+   - `insertAtTop`: Set to `true` to insert new records at the top of the spreadsheet, or `false` to append at the bottom
+   - `use12HourFormat`: Set to `true` for AM/PM time format, or `false` for 24-hour format
+6. Deploy the script as a web app:
    - Click Deploy → New Deployment
    - Select "Web app" as the type
    - Set "Execute as" to "Me"
    - Set "Who has access" to "Anyone"
    - Click "Deploy"
-6. Copy the provided web app URL and paste it as `GOOGLE_SCRIPT_URL_0` in your `.env` file
+7. Copy the provided web app URL and paste it as `GOOGLE_SCRIPT_URL_0` in your `.env` file
 
 ### Google Drive Setup
 

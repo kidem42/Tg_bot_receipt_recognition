@@ -6,6 +6,7 @@ from telegram.ext import (
     filters,
     ContextTypes
 )
+from modules.receipt_notes import handle_receipt_note, register_receipt_message
 from io import BytesIO
 import time
 import asyncio
@@ -50,7 +51,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• 📸 Upload and organize photos\n"
             f"• 📄 Process PDF documents\n"
             f"• 🧾 Analyze receipts automatically\n"
-            f"• 📊 Track expenses in Google Sheets\n\n"
+            f"• 📊 Track expenses in Google Sheets\n"
+            f"• 📝 Add notes to receipts by replying to messages\n\n"
             f"📤 All files are stored in Google Drive folder.\n"
             f"⚠️ Maximum file size: 5 MB\n\n"
             f"🔍 Send me a receipt photo or PDF to get started!\n"
@@ -88,6 +90,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• For best results, ensure receipts are clearly visible\n"
             "• When uploading multiple files, wait for the confirmation message\n"
             "• You can click on the Google Drive link to view all your uploaded files\n\n"
+            
+            "📝 *Receipt Notes:*\n"
+            "• Reply to any receipt message with text to add notes\n"
+            "• Notes are saved directly to your expense spreadsheet\n"
+            "• Notes can be added up to 14 days after uploading a receipt\n\n"
             
             "💬 If you need more assistance, please contact the administrator."
         )
@@ -214,7 +221,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # Send message about successful analysis
                         items_text = receipt_data.get('items', 'Not recognized')
-                        await update.message.reply_text(
+                        message = await update.message.reply_text(
                             f"✅ Receipt successfully analyzed and saved!\n\n"
                             f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
                             f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
@@ -222,6 +229,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"🕓 Time: {receipt_data.get('time')}\n"
                             f"🛒 Items: {items_text}"
                         )
+                        
+                        # Register message for receipt notes
+                        register_receipt_message(user_id, message.message_id, record_created, message.text)
                     else:
                         # Delete processing message
                         await context.bot.delete_message(
@@ -518,7 +528,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Determine file type for message
                     file_type = "PDF document" if mime_type == "application/pdf" else "Image"
                     
-                    await update.message.reply_text(
+                    message = await update.message.reply_text(
                         f"✅ {file_type} successfully analyzed and saved!\n\n"
                         f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
                         f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
@@ -526,6 +536,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"🕓 Time: {receipt_data.get('time')}\n"
                         f"🛒 Items: {items_text}"
                     )
+                    
+                    # Register message for receipt notes
+                    register_receipt_message(user_id, message.message_id, record_created, message.text)
                 else:
                     # Delete processing message
                     await context.bot.delete_message(
@@ -760,6 +773,11 @@ def setup_handlers(application):
     # File handlers
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    
+    # Text message handler for notes (only for replies)
+    application.add_handler(MessageHandler(
+        filters.TEXT & filters.REPLY, handle_receipt_note
+    ))
     
     # Handler for unsupported types
     application.add_handler(MessageHandler(

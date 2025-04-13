@@ -45,3 +45,6 @@ logs/
 .vscode/
 *.swp
 *.swo
+
+# Data files
+receipt_messages.json

@@ -16,6 +16,7 @@ const COLUMN_CONFIG = {
   "Currency": true,
   "Amount in USD": true,
   "Recipt": true,
+  "Notes": true,
   "User ID": true,
   "User Name": true,
   "Timestamp": true
@@ -30,6 +31,7 @@ const COLUMN_ORDER = [
   "Currency",
   "Amount in USD",
   "Recipt",
+  "Notes",
   "User ID",
   "User Name",
   "Timestamp"
@@ -177,6 +179,9 @@ function doPost(e) {
         break;
       case 'createExpenseRecord':
         response = createExpenseRecord(params.data);
+        break;
+      case 'updateReceiptNote':
+        response = updateReceiptNote(params);
         break;
       case 'test':
         // Simple test endpoint to verify API connectivity
@@ -529,6 +534,53 @@ function ensureColumnOrder(sheet) {
   return sheet;
 }
 
+// Function to update receipt note
+function updateReceiptNote(params) {
+  try {
+    // Validate parameters
+    if (!params.rowId) {
+      return { 
+        success: false, 
+        error: "Missing rowId parameter"
+      };
+    }
+    
+    if (!params.note) {
+      return { 
+        success: false, 
+        error: "Missing note parameter"
+      };
+    }
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName("Expenses");
+    
+    if (!sheet) {
+      return { 
+        success: false, 
+        error: "Expenses sheet not found"
+      };
+    }
+    
+    // Find or create Notes column
+    let notesColIndex = getOrCreateColumn(sheet, "Notes");
+    
+    // Update cell value
+    sheet.getRange(params.rowId, notesColIndex).setValue(params.note);
+    
+    return { 
+      success: true, 
+      message: "Note updated successfully"
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: "Failed to update note",
+      details: error.toString()
+    };
+  }
+}
+
 // Create expense record in spreadsheet
 function createExpenseRecord(data) {
   try {
@@ -630,33 +682,42 @@ function createExpenseRecord(data) {
           sheet.getRange(2, timeColIndex).setNumberFormat("HH:mm");
         }
       }
+      
+      // Return row ID 2 since we inserted at the top
+      // logToSheet("Expense record created successfully", "INFO");
+      return { 
+        success: true, 
+        message: "Expense record created successfully",
+        rowId: 2
+      };
     } else {
       // Append at the bottom (default behavior)
-      const lastRow = sheet.getLastRow() + 1;
       sheet.appendRow(newRow);
+      const newRowId = sheet.getLastRow();
       
       // Apply formatting to date and time columns
       const dateColIndex = findColumnByHeader(sheet, "Date");
       const timeColIndex = findColumnByHeader(sheet, "Time");
       
       if (dateColIndex > 0) {
-        sheet.getRange(lastRow, dateColIndex).setNumberFormat("d mmm yyyy г.");
+        sheet.getRange(newRowId, dateColIndex).setNumberFormat("d mmm yyyy г.");
       }
       
       if (timeColIndex > 0) {
         if (GENERAL_CONFIG.use12HourFormat) {
-          sheet.getRange(lastRow, timeColIndex).setNumberFormat("h:mm AM/PM");
+          sheet.getRange(newRowId, timeColIndex).setNumberFormat("h:mm AM/PM");
         } else {
-          sheet.getRange(lastRow, timeColIndex).setNumberFormat("HH:mm");
+          sheet.getRange(newRowId, timeColIndex).setNumberFormat("HH:mm");
         }
       }
+      
+      // logToSheet("Expense record created successfully", "INFO");
+      return { 
+        success: true, 
+        message: "Expense record created successfully",
+        rowId: newRowId
+      };
     }
-    
-    // logToSheet("Expense record created successfully", "INFO");
-    return { 
-      success: true, 
-      message: "Expense record created successfully"
-    };
   } catch (error) {
     // logToSheet("Error in createExpenseRecord: " + error.toString(), "ERROR");
     return { 

@@ -9,6 +9,7 @@ const GENERAL_CONFIG = {
 
 // Column configuration (enable/disable columns)
 const COLUMN_CONFIG = {
+  "RecordId": true,  // Added RecordId column
   "Date": true,
   "Time": true,
   "Items": true,
@@ -24,6 +25,7 @@ const COLUMN_CONFIG = {
 
 // Column order definition
 const COLUMN_ORDER = [
+  "RecordId",  // Added RecordId as the first column
   "Date",
   "Time",
   "Items",
@@ -182,6 +184,9 @@ function doPost(e) {
         break;
       case 'updateReceiptNote':
         response = updateReceiptNote(params);
+        break;
+      case 'updateReceiptNoteByRecordId':
+        response = updateReceiptNoteByRecordId(params);
         break;
       case 'test':
         // Simple test endpoint to verify API connectivity
@@ -581,6 +586,113 @@ function updateReceiptNote(params) {
   }
 }
 
+// Function to update receipt note by record ID
+function updateReceiptNoteByRecordId(params) {
+  try {
+    // Validate parameters
+    if (!params.recordId) {
+      return { 
+        success: false, 
+        error: "Missing recordId parameter"
+      };
+    }
+    
+    if (!params.note) {
+      return { 
+        success: false, 
+        error: "Missing note parameter"
+      };
+    }
+    
+    // Check if we're working with the correct spreadsheet
+    if (params.spreadsheetId) {
+      const currentSpreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+      if (params.spreadsheetId !== currentSpreadsheetId) {
+        return { 
+          success: false, 
+          error: "Spreadsheet ID mismatch. This request should be sent to a different Google Script."
+        };
+      }
+    }
+    
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet;
+    
+    // If sheet ID is provided, try to find the sheet by ID
+    if (params.sheetId) {
+      const sheets = ss.getSheets();
+      for (let i = 0; i < sheets.length; i++) {
+        if (sheets[i].getSheetId().toString() === params.sheetId.toString()) {
+          sheet = sheets[i];
+          break;
+        }
+      }
+      
+      if (!sheet) {
+        return { 
+          success: false, 
+          error: "Sheet with specified ID not found"
+        };
+      }
+    } else {
+      // Otherwise use the Expenses sheet
+      sheet = ss.getSheetByName("Expenses");
+      
+      if (!sheet) {
+        return { 
+          success: false, 
+          error: "Expenses sheet not found"
+        };
+      }
+    }
+    
+    // Find RecordId and Notes columns
+    let recordIdColIndex = findColumnByHeader(sheet, "RecordId");
+    let notesColIndex = getOrCreateColumn(sheet, "Notes");
+    
+    if (recordIdColIndex === 0) {
+      return { 
+        success: false, 
+        error: "RecordId column not found"
+      };
+    }
+    
+    // Get all values from RecordId column
+    const lastRow = sheet.getLastRow();
+    const recordIds = sheet.getRange(1, recordIdColIndex, lastRow, 1).getValues();
+    
+    // Find the row with the matching UUID
+    let rowIndex = 0;
+    for (let i = 0; i < recordIds.length; i++) {
+      if (recordIds[i][0] === params.recordId) {
+        rowIndex = i + 1; // +1 because indices in Sheets start at 1
+        break;
+      }
+    }
+    
+    if (rowIndex === 0) {
+      return { 
+        success: false, 
+        error: "Record with specified ID not found"
+      };
+    }
+    
+    // Update the note
+    sheet.getRange(rowIndex, notesColIndex).setValue(params.note);
+    
+    return { 
+      success: true, 
+      message: "Note updated successfully"
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: "Failed to update note",
+      details: error.toString()
+    };
+  }
+}
+
 // Create expense record in spreadsheet
 function createExpenseRecord(data) {
   try {
@@ -612,10 +724,20 @@ function createExpenseRecord(data) {
         
         // Format headers
         sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
+        
+        // Hide RecordId column
+        sheet.hideColumns(1);
+        
         // logToSheet("Created new Expenses sheet", "INFO");
       } else {
         // Ensure the sheet has the correct column order and headers
         sheet = ensureColumnOrder(sheet);
+        
+        // Hide RecordId column if it exists
+        const recordIdColIndex = findColumnByHeader(sheet, "RecordId");
+        if (recordIdColIndex > 0) {
+          sheet.hideColumns(recordIdColIndex);
+        }
       }
     } catch (e) {
       // logToSheet("Failed to access or create Expenses sheet: " + e.toString(), "ERROR");
@@ -629,8 +751,18 @@ function createExpenseRecord(data) {
     // Get current timestamp
     var timestamp = new Date().toISOString();
     
+    // Generate UUID for the record
+    const recordId = Utilities.getUuid();
+    
+    // Get spreadsheet and sheet IDs
+    const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    const sheetId = sheet.getSheetId();
+    
     // Prepare row data based on enabled columns
     var rowData = {};
+    
+    // Add RecordId
+    rowData["RecordId"] = recordId;
     
     // Map the data to the new column names
     if (COLUMN_CONFIG["User ID"]) rowData["User ID"] = data.telegram_user_id;
@@ -683,12 +815,15 @@ function createExpenseRecord(data) {
         }
       }
       
-      // Return row ID 2 since we inserted at the top
+      // Return row ID 2 since we inserted at the top, along with recordId, spreadsheetId, and sheetId
       // logToSheet("Expense record created successfully", "INFO");
       return { 
         success: true, 
         message: "Expense record created successfully",
-        rowId: 2
+        rowId: 2,
+        recordId: recordId,
+        spreadsheetId: spreadsheetId,
+        sheetId: sheetId
       };
     } else {
       // Append at the bottom (default behavior)
@@ -715,7 +850,10 @@ function createExpenseRecord(data) {
       return { 
         success: true, 
         message: "Expense record created successfully",
-        rowId: newRowId
+        rowId: newRowId,
+        recordId: recordId,
+        spreadsheetId: spreadsheetId,
+        sheetId: sheetId
       };
     }
   } catch (error) {

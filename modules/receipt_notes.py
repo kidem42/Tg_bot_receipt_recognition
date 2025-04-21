@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from modules.user_validator import is_user_allowed
 from modules.message_tracker import get_receipt_by_message
-from modules.google_sheets import update_receipt_note
+from modules.google_sheets import update_receipt_note, update_receipt_note_by_record_id
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -39,8 +39,23 @@ async def handle_receipt_note(update: Update, context: ContextTypes.DEFAULT_TYPE
         receipt_info = get_receipt_by_message(user_id, original_message.message_id)
         
         if receipt_info:
-            # Update receipt note in Google Sheets
-            success = update_receipt_note(receipt_info["sheet_row_id"], note_text)
+            success = False
+            
+            # Check if we have record_id and other data
+            if receipt_info.get("record_id") and receipt_info.get("spreadsheet_id") and receipt_info.get("sheet_id"):
+                # Update receipt note in Google Sheets using record_id
+                success = update_receipt_note_by_record_id(
+                    receipt_info["record_id"], 
+                    note_text, 
+                    user_id,
+                    receipt_info["spreadsheet_id"],
+                    receipt_info["sheet_id"]
+                )
+                logger.info(f"Attempting to update note using record_id: {receipt_info['record_id']}")
+            else:
+                # Fallback to old method
+                success = update_receipt_note(receipt_info["sheet_row_id"], note_text)
+                logger.info(f"Attempting to update note using row_id: {receipt_info['sheet_row_id']}")
             
             if success:
                 await update.message.reply_text("✅ Note added successfully to the receipt!", reply_to_message_id=update.message.message_id)
@@ -52,7 +67,7 @@ async def handle_receipt_note(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text("❌ Could not find the associated receipt or note is too old (max 14 days).")
             logger.warning(f"Receipt not found for message_id {original_message.message_id} from user {user_id}")
 
-def register_receipt_message(user_id, message_id, sheet_row_id, message_text):
+def register_receipt_message(user_id, message_id, sheet_row_id, message_text, record_id=None, group_id=None, spreadsheet_id=None, sheet_id=None):
     """
     Register a receipt message for tracking
     
@@ -61,9 +76,13 @@ def register_receipt_message(user_id, message_id, sheet_row_id, message_text):
         message_id: Message ID
         sheet_row_id: Row ID in Google Sheets
         message_text: Message text
+        record_id: Unique record ID (UUID)
+        group_id: User group ID
+        spreadsheet_id: Google Spreadsheet ID
+        sheet_id: Google Sheet ID
         
     Returns:
         bool: True if successful, False otherwise
     """
     from modules.message_tracker import add_message_tracking
-    return add_message_tracking(user_id, message_id, sheet_row_id, message_text)
+    return add_message_tracking(user_id, message_id, sheet_row_id, message_text, record_id, group_id, spreadsheet_id, sheet_id)

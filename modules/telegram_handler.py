@@ -208,11 +208,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if receipt_data:
                     # Create a record in Google Sheets
                     from modules.google_sheets import create_expense_record
-                    record_created = create_expense_record(
+                    result = create_expense_record(
                         user_id, username, receipt_data, file_url
                     )
                     
-                    if record_created:
+                    if result:
                         # Delete processing message
                         await context.bot.delete_message(
                             chat_id=update.effective_chat.id,
@@ -224,14 +224,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         message = await update.message.reply_text(
                             f"✅ Receipt successfully analyzed and saved!\n\n"
                             f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
-                            f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
+                            #f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
                             f"📅 Date: {receipt_data.get('date')}\n"
                             f"🕓 Time: {receipt_data.get('time')}\n"
                             f"🛒 Items: {items_text}"
                         )
                         
-                        # Register message for receipt notes
-                        register_receipt_message(user_id, message.message_id, record_created, message.text)
+                        # Register message for receipt notes with all data
+                        register_receipt_message(
+                            user_id, 
+                            message.message_id, 
+                            result["row_id"], 
+                            message.text,
+                            result["record_id"],
+                            result["group_id"],
+                            result["spreadsheet_id"],
+                            result["sheet_id"]
+                        )
                     else:
                         # Delete processing message
                         await context.bot.delete_message(
@@ -512,11 +521,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if receipt_data:
                 # Create a record in Google Sheets
                 from modules.google_sheets import create_expense_record
-                record_created = create_expense_record(
+                result = create_expense_record(
                     user_id, username, receipt_data, file_url
                 )
                 
-                if record_created:
+                if result:
                     # Delete processing message
                     await context.bot.delete_message(
                         chat_id=update.effective_chat.id,
@@ -537,8 +546,17 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"🛒 Items: {items_text}"
                     )
                     
-                    # Register message for receipt notes
-                    register_receipt_message(user_id, message.message_id, record_created, message.text)
+                    # Register message for receipt notes with all data
+                    register_receipt_message(
+                        user_id, 
+                        message.message_id, 
+                        result["row_id"], 
+                        message.text,
+                        result["record_id"],
+                        result["group_id"],
+                        result["spreadsheet_id"],
+                        result["sheet_id"]
+                    )
                 else:
                     # Delete processing message
                     await context.bot.delete_message(
@@ -754,33 +772,52 @@ async def send_batch_complete(context, user_key):
         # Delete tracker
         del batch_trackers[user_key]
 
-async def handle_unsupported(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for unsupported message types"""
-    user_id = update.effective_user.id
-    
-    if is_user_allowed(user_id):
-        await update.message.reply_text(
-            "I can only accept photos and documents. "
-            "Video and audio files are not supported yet."
-        )
-
 def setup_handlers(application):
-    """Setup command and message handlers"""
+    """Sets up all the handlers for the Telegram bot"""
     # Command handlers
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("help", help_command))
     
-    # File handlers
+    # Message handlers for different types of content
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     
-    # Text message handler for notes (only for replies)
-    application.add_handler(MessageHandler(
-        filters.TEXT & filters.REPLY, handle_receipt_note
-    ))
+    # Handler for unsupported message types
+    unsupported_filter = ~filters.PHOTO & ~filters.Document.ALL & ~filters.COMMAND & ~filters.TEXT
+    application.add_handler(MessageHandler(unsupported_filter, handle_unsupported))
     
-    # Handler for unsupported types
-    application.add_handler(MessageHandler(
-        filters.VIDEO | filters.AUDIO | filters.VOICE, 
-        handle_unsupported
-    ))
+    # Handler for replies to receipt messages
+    application.add_handler(MessageHandler(filters.TEXT & filters.REPLY, handle_receipt_note))
+    
+    return application
+
+async def handle_unsupported(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for unsupported message types"""
+    user_id = update.effective_user.id
+    
+    if not is_user_allowed(user_id):
+        await update.message.reply_text("Sorry, you don't have access to this bot.")
+        return
+    
+    # Get message type
+    message_type = "unknown"
+    if update.message.video:
+        message_type = "video"
+    elif update.message.audio:
+        message_type = "audio"
+    elif update.message.voice:
+        message_type = "voice message"
+    elif update.message.sticker:
+        message_type = "sticker"
+    elif update.message.animation:
+        message_type = "animation/GIF"
+    elif update.message.location:
+        message_type = "location"
+    elif update.message.contact:
+        message_type = "contact"
+    
+    # Send message about unsupported type
+    await update.message.reply_text(
+        f"⚠️ Sorry, {message_type} files are not supported.\n\n"
+        f"Please send receipts as photos or PDF documents."
+    )

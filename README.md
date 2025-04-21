@@ -19,8 +19,13 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - Structured data storage in Google Sheets with configurable columns
 - User permission system with group-based access control
 - Secure API communication with Google Apps Script
+- UUID-based record tracking to ensure notes are added to the correct receipts regardless of row position
 
 ## Recent Updates
+- Implemented UUID-based record tracking system to solve row shifting issues
+  - Each receipt now has a unique identifier that doesn't change when rows shift
+  - Notes are now linked to receipts by UUID instead of row number
+  - Added tracking of spreadsheet and sheet IDs for better cross-group support
 - Added option to insert new records at the top of the spreadsheet (insertAtTop configuration)
 - Added date and time formatting options (use12HourFormat configuration)
 - Added receipt notes functionality allowing users to add context to receipts by replying to bot messages
@@ -51,6 +56,7 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 4. **Google Drive Integration**: Stores files in user-specific folders
 5. **Google Sheets Integration**: Records extracted receipt data for analysis
 6. **User Authentication System**: Controls access via configurable user groups
+7. **UUID Tracking System**: Ensures data integrity when rows shift in spreadsheets
 
 ### Key Modules
 - `account_router.py`: Manages user permissions and routes to appropriate Google resources
@@ -61,11 +67,14 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - `telegram_handler.py`: Handles Telegram bot interactions and commands
 - `google_sheets.py`: Manages the creation of records in Google Sheets
 - `file_processor.py`: Coordinates the file processing workflow
-- `message_tracker.py`: Tracks message IDs and their associated receipt records
+- `message_tracker.py`: Tracks message IDs and their associated receipt records with UUIDs
 - `receipt_notes.py`: Handles receipt notes functionality and message registration
 
 ### Google Apps Script Component
 - `pyHandler.gs`: Google Apps Script web app that handles Drive/Sheets operations
+  - Generates UUIDs for each record
+  - Provides methods to find records by UUID instead of row number
+  - Manages hidden RecordId column for UUID storage
 
 ## Setup Instructions
 
@@ -160,6 +169,27 @@ python main.py
 - The bot will confirm that your note has been added with a "✅ Note added successfully to the receipt!" message
 - All files are stored in your Google Drive, and receipt data is recorded in Google Sheets
 - Notes can be added up to 14 days after uploading a receipt
+
+## Technical Details
+
+### UUID-based Record Tracking
+
+The system uses universally unique identifiers (UUIDs) to track receipt records:
+
+1. **Record Creation**:
+   - When a new receipt is processed, a UUID is generated and stored in a hidden "RecordId" column
+   - The UUID, along with spreadsheet and sheet IDs, is returned to the bot
+   - This information is stored in the receipt_messages.json tracking file
+
+2. **Note Addition**:
+   - When a user replies to add a note, the system retrieves the UUID from tracking data
+   - The note is added to the correct record by searching for its UUID
+   - This ensures notes are added to the right receipt even if rows have shifted
+
+3. **Benefits**:
+   - Solves the problem of row shifting when new records are added at the top
+   - Ensures data integrity across multiple user groups
+   - Provides backward compatibility with existing records
 
 ## Security
 

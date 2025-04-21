@@ -16,8 +16,10 @@ from modules.user_validator import is_user_allowed
 from modules.file_processor import get_formatted_filename
 from modules.google_script import get_user_folder_id, upload_file_to_drive
 from modules.openai_client import analyze_image
+from modules.account_router import get_user_group
 from config import MAX_FILE_SIZE
 from config import MAX_PDF_PAGES
+from config import GROUP_MESSAGE_TEMPLATES
 
 # Cache for user folder IDs
 user_folder_cache = {}
@@ -221,7 +223,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # Send message about successful analysis
                         items_text = receipt_data.get('items', 'Not recognized')
-                        message = await update.message.reply_text(
+                        
+                        # Get user group and check for template
+                        user_group = get_user_group(user_id)
+                        template = None
+                        if user_group is not None and user_group in GROUP_MESSAGE_TEMPLATES:
+                            template = GROUP_MESSAGE_TEMPLATES[user_group]
+                        
+                        # Construct the message
+                        message_text = (
                             f"✅ Receipt successfully analyzed and saved!\n\n"
                             f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
                             #f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
@@ -229,6 +239,16 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"🕓 Time: {receipt_data.get('time')}\n"
                             f"🛒 Items: {items_text}"
                         )
+                        
+                        # Add template if it exists
+                        if template:
+                            message_text += f"\n\n{template}"
+                        
+                        # Send the message with Markdown formatting if template exists
+                        if template:
+                            message = await update.message.reply_text(message_text, parse_mode="Markdown")
+                        else:
+                            message = await update.message.reply_text(message_text)
                         
                         # Register message for receipt notes with all data
                         register_receipt_message(
@@ -537,14 +557,31 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Determine file type for message
                     file_type = "PDF document" if mime_type == "application/pdf" else "Image"
                     
-                    message = await update.message.reply_text(
+                    # Get user group and check for template
+                    user_group = get_user_group(user_id)
+                    template = None
+                    if user_group is not None and user_group in GROUP_MESSAGE_TEMPLATES:
+                        template = GROUP_MESSAGE_TEMPLATES[user_group]
+                    
+                    # Construct the message
+                    message_text = (
                         f"✅ {file_type} successfully analyzed and saved!\n\n"
                         f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
-                        f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
+                        #f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
                         f"📅 Date: {receipt_data.get('date')}\n"
                         f"🕓 Time: {receipt_data.get('time')}\n"
                         f"🛒 Items: {items_text}"
                     )
+                    
+                    # Add template if it exists
+                    if template:
+                        message_text += f"\n\n{template}"
+                    
+                    # Send the message with Markdown formatting if template exists
+                    if template:
+                        message = await update.message.reply_text(message_text, parse_mode="Markdown")
+                    else:
+                        message = await update.message.reply_text(message_text)
                     
                     # Register message for receipt notes with all data
                     register_receipt_message(

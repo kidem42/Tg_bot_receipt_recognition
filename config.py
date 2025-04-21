@@ -74,3 +74,16 @@ RECEIPT_USER_PROMPT = """Analyze this receipt and extract all required informati
 MESSAGES_TRACKING_FILE = "receipt_messages.json"  # Path to temporary file
 MAX_RECORD_AGE = 14 * 24 * 60 * 60  # Maximum time to keep records (14 days in seconds)
 CLEANUP_INTERVAL = 3 * 24 * 60 * 60  # Cleanup check interval (3 days in seconds)
+
+# Message templates for specific user groups
+GROUP_MESSAGE_TEMPLATES = {
+    # Group 0 template
+    0: """
+*IMPORTANT!*
+Reply to this message to add Notes. 
+Use "*REP*" for company spent reporting, and "*MY*" for reimbursement
+""",
+    # Group 1 template - can be None or different message
+    1: None,
+    # Add more group templates as needed
+}

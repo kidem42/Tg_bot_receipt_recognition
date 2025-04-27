@@ -12,22 +12,32 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
   - List of purchased items (simply listed with no strong focus on that part)
 - Add notes to receipts by replying to the bot's messages
 - Notes are stored in Google Sheets alongside receipt data
-- Group-specific template messages with Markdown formatting
+- Group-specific template messages with Markdown formatting and folder links
 - Automatic cleanup of old message tracking records (after 14 days)
-- Multi-page PDF document support
+- Multi-page PDF document support with batch analysis
 - Image conversion from various formats to ones compatible with OpenAI's API
 - Document storage in Google Drive with user-specific folders based on telegram user ID in the name 
 - Structured data storage in Google Sheets with configurable columns
 - User permission system with group-based access control
-- Secure API communication with Google Apps Script
 - UUID-based record tracking to ensure notes are added to the correct receipts regardless of row position
 
 ## Recent Updates
-- Added group-specific template messages for receipt responses
-  - Configurable templates in config.py for different user groups
+- Added robust retry mechanism with exponential backoff for API calls
+- Enhanced multi-page PDF support with batch analysis for better handling of multi-page receipts
+- Improved group-specific template messages:
+  - Added Google Drive folder URL in template messages
   - Support for Markdown formatting (bold text) in templates
   - Templates can include instructions for users (e.g., how to add notes)
   - Only shown to users in specified groups
+- Implemented truncation of long item lists in Telegram messages
+- Removed time display from Telegram messages
+- Removed "Tax Amount" field from the OpenAI prompt and data processing
+- Enhanced Google Sheets configuration in pyHandler.js:
+  - Added option to enable/disable specific columns
+  - Added option to hide specific columns
+  - Added explicit column order definition
+  - Added logging configuration (enableLogging)
+- Simplified API security by removing API key requirement
 - Implemented UUID-based record tracking system to solve row shifting issues
   - Each receipt now has a unique identifier that doesn't change when rows shift
   - Notes are now linked to receipts by UUID instead of row number
@@ -38,8 +48,6 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 - Implemented message tracking system for associating notes with receipts
 - Added "Notes" column to the spreadsheet
 - Added automatic cleanup of old message tracking records (after 14 days)
-- Removed "Tax Amount" field from the OpenAI prompt and data processing
-- Removed "ID" column from the spreadsheet
 - Added "Amount in USD" column for manual entry
 - Renamed columns for better clarity:
   - "Telegram User ID" → "User ID"
@@ -48,9 +56,6 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
   - "Image URL" → "Recipt"
 - Reordered columns to a specific sequence
 - Improved column handling to work by header name instead of column index
-- Added configuration to enable/disable columns
-- Added configuration to insert new records at the top of the sheet (insertAtTop)
-- Added configuration for time format (12-hour or 24-hour format)
 
 
 ## Architecture
@@ -58,7 +63,7 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 ### Components
 1. **Telegram Bot Interface**: Handles user interactions via the Telegram API
 2. **File Processing Pipeline**: Converts, uploads and processes various file formats
-3. **OpenAI Integration**: Extracts structured data from receipt images
+3. **OpenAI Integration**: Extracts structured data from receipt images using GPT-4o models
 4. **Google Drive Integration**: Stores files in user-specific folders
 5. **Google Sheets Integration**: Records extracted receipt data for analysis
 6. **User Authentication System**: Controls access via configurable user groups
@@ -67,7 +72,7 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 ### Key Modules
 - `account_router.py`: Manages user permissions and routes to appropriate Google resources
 - `google_script.py`: Handles communication with Google Apps Script
-- `openai_client.py`: Processes images using OpenAI's vision capabilities
+- `openai_client.py`: Processes images using OpenAI's vision capabilities with retry mechanism
 - `pdf_to_image.py`: Converts PDF documents to images for processing
 - `img_converter.py`: Converts various image formats to ones compatible with OpenAI
 - `telegram_handler.py`: Handles Telegram bot interactions and commands
@@ -81,6 +86,9 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
   - Generates UUIDs for each record
   - Provides methods to find records by UUID instead of row number
   - Manages hidden RecordId column for UUID storage
+  - Configurable column visibility and order
+  - Supports 12-hour or 24-hour time format
+  - Optional logging to a dedicated Logs sheet
 
 ## Setup Instructions
 
@@ -112,7 +120,6 @@ cp .env.example .env
 ```
 TELEGRAM_TOKEN=your_telegram_token_here
 OPENAI_API_KEY=your_openai_api_key_here
-GOOGLE_SCRIPT_API_KEY=your_random_api_key_here  # Should match value in pyHandler.gs
 
 # Google Script URLs for different user groups
 GOOGLE_SCRIPT_URL_0=your_google_script_url_for_group_0
@@ -129,12 +136,17 @@ MAIN_FOLDER_ID_0=your_folder_id_for_group_0
 1. Create a new Google Sheet where you want to store the receipt data
 2. Open the Script Editor (Extensions → Apps Script)
 3. Copy the content of `pyHandler.gs` into the editor
-4. Replace the placeholder `'GOOGLE_SCRIPT_API_KEY'` with the same key you specified in your `.env` file
-5. Configure the Google Apps Script settings (optional):
+4. Configure the Google Apps Script settings in the GENERAL_CONFIG object:
    - `insertAtTop`: Set to `true` to insert new records at the top of the spreadsheet, or `false` to append at the bottom
    - `use12HourFormat`: Set to `true` for AM/PM time format, or `false` for 24-hour format
+   - `enableLogging`: Set to `true` to enable logging to a Logs sheet, or `false` to disable
 
-6. Configure group-specific template messages in `config.py` (optional):
+5. Configure column settings in the COLUMN_CONFIG object:
+   - Enable or disable specific columns by setting their values to `true` or `false`
+   - Hide columns by adding their names to the HIDDEN_COLUMNS array
+   - Set column order by arranging names in the COLUMN_ORDER array
+
+6. Configure group-specific template messages in `config.py`:
    ```python
    # Message templates for specific user groups
    GROUP_MESSAGE_TEMPLATES = {
@@ -143,9 +155,10 @@ MAIN_FOLDER_ID_0=your_folder_id_for_group_0
    *IMPORTANT!*
    Reply to this message to add Notes. 
    Use "*REP*" for company spent reporting, and "*MY*" for reimbursement
+   [Folder]({folder_url})
    """,
        # Group 1 template - set to None for no template
-       1: None,
+       #1: None,
        # Add more group templates as needed
    }
    ```
@@ -202,6 +215,7 @@ The system supports customized template messages for different user groups:
    - Templates are defined in `config.py` using the `GROUP_MESSAGE_TEMPLATES` dictionary
    - Each user group can have a unique template or no template (set to `None`)
    - Templates support Markdown formatting for text styling (e.g., *bold text*)
+   - Templates can include the Google Drive folder URL using the `{folder_url}` placeholder
 
 2. **Implementation**:
    - When a receipt is processed, the system checks the user's group
@@ -212,6 +226,7 @@ The system supports customized template messages for different user groups:
    - Providing group-specific instructions for receipt handling
    - Highlighting important information with bold formatting
    - Customizing workflow guidance for different departments or teams
+   - Providing direct links to user-specific Google Drive folders
 
 ### UUID-based Record Tracking
 
@@ -234,8 +249,6 @@ The system uses universally unique identifiers (UUIDs) to track receipt records:
 
 ## Security
 
-- The API key for Google Apps Script is secured with SHA-256 signatures
-- Request timestamp validation prevents replay attacks
 - User permission control limits access to authorized users only
 - File size limits prevent abuse (5MB maximum file size)
 
@@ -261,13 +274,13 @@ This project uses the following open-source libraries:
 
 Full license texts for these dependencies can be found in the `licenses` directory.
 
-License
+## License
 This project is licensed under the Apache License, Version 2.0 - see the LICENSE file for details.
 
 What this means for you:
 
-You can freely use, modify, and distribute this software
-You can use the software for commercial purposes
-You must include the original copyright notice and license
-You must state significant changes made to the software
-The full license text is available at http://www.apache.org/licenses/LICENSE-2.0
+- You can freely use, modify, and distribute this software
+- You can use the software for commercial purposes
+- You must include the original copyright notice and license
+- You must state significant changes made to the software
+- The full license text is available at http://www.apache.org/licenses/LICENSE-2.0

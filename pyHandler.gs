@@ -4,8 +4,9 @@
 const GENERAL_CONFIG = {
   "insertAtTop": true,  // Set to true to insert new records at the top, false to insert at the bottom
   "use12HourFormat": true,  // Set to true for AM/PM format, false for 24-hour format
-  "apiKey": "GOOGLE_SCRIPT_API_KEY"  // API key for security checks
+  "enableLogging": false  // Set to true to enable logging to the Logs sheet, false to disable
 };
+
 
 // Column configuration (enable/disable columns)
 const COLUMN_CONFIG = {
@@ -23,7 +24,14 @@ const COLUMN_CONFIG = {
   "Timestamp": true
 };
 
-// Column order definition
+// Columns to hide in the spreadsheet
+const HIDDEN_COLUMNS = [
+  "RecordId",  // Always hide RecordId column
+  "Timestamp"    // Hide User ID column
+  // Add more columns to hide as needed
+];
+
+/// Column order definition
 const COLUMN_ORDER = [
   "RecordId",  // Added RecordId as the first column
   "Date",
@@ -47,21 +55,13 @@ const COLUMN_MAPPING = {
   "Image URL": "Recipt"
 };
 
-// Helper function to convert bytes to hex
-function byteArrayToHex(bytes) {
-  var hexString = '';
-  for (var i = 0; i < bytes.length; i++) {
-    var byteHex = (bytes[i] & 0xFF).toString(16);
-    if (byteHex.length < 2) {
-      byteHex = '0' + byteHex;
-    }
-    hexString += byteHex;
-  }
-  return hexString;
-}
-
 // Helper function for logging
 function logToSheet(message, type) {
+  // If logging is disabled, do nothing
+  if (!GENERAL_CONFIG.enableLogging) {
+    return true;
+  }
+  
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var logSheet = ss.getSheetByName("Logs");
@@ -84,83 +84,15 @@ function logToSheet(message, type) {
 function doPost(e) {
   try {
     // Log incoming request
-    // logToSheet("Received request: " + JSON.stringify(e.parameter), "REQUEST");
+    logToSheet("Received request", "REQUEST");
     
-    // Security check - try to get headers from both URL parameters and request headers
-    var headers = e.parameter;
-    var apiKey = headers['X-API-Key'];
-    var timestamp = headers['X-Timestamp'];
-    var signature = headers['X-Signature'];
-    
-    // Log all parameters for debugging
-    // logToSheet("All parameters: " + JSON.stringify(e.parameter), "DEBUG");
-    
-    // Check if headers are present
-    if (!apiKey || !timestamp || !signature) {
-      // logToSheet("Missing security headers in parameters, checking request headers", "INFO");
-      
-      // Try to get from request headers
-      var requestHeaders = e.headers || {};
-      apiKey = requestHeaders['X-API-Key'] || requestHeaders['x-api-key'];
-      timestamp = requestHeaders['X-Timestamp'] || requestHeaders['x-timestamp'];
-      signature = requestHeaders['X-Signature'] || requestHeaders['x-signature'];
-      
-      // If still missing, return error
-      if (!apiKey || !timestamp || !signature) {
-        // logToSheet("Missing security headers in both parameters and request headers", "ERROR");
-        return ContentService.createTextOutput(JSON.stringify({ 
-          error: "Missing security headers",
-          details: "One or more required headers (X-API-Key, X-Timestamp, X-Signature) are missing"
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-    
-    // logToSheet("Using security headers - API Key: " + apiKey.substring(0, 5) + "..., Timestamp: " + timestamp + ", Signature: " + signature.substring(0, 10) + "...", "INFO");
-    
-    // API key check
-    if (apiKey !== GENERAL_CONFIG.apiKey) {
-      // logToSheet("Invalid API key: " + apiKey, "ERROR");
-      return ContentService.createTextOutput(JSON.stringify({ 
-        error: "Invalid API key",
-        details: "The provided API key does not match the expected value"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // Request time check (not older than 5 minutes)
-    var currentTime = Math.floor(Date.now() / 1000);
-    if (currentTime - timestamp > 300) {
-      // logToSheet("Request expired: current=" + currentTime + ", request=" + timestamp, "ERROR");
-      return ContentService.createTextOutput(JSON.stringify({ 
-        error: "Request expired",
-        details: "The request timestamp is more than 5 minutes old"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // Signature verification
-    var expectedSignature = Utilities.computeDigest(
-      Utilities.DigestAlgorithm.SHA_256,
-      apiKey + timestamp
-    );
-    var expectedSignatureHex = byteArrayToHex(expectedSignature);
-    
-    if (signature !== expectedSignatureHex) {
-      // logToSheet("Invalid signature: expected=" + expectedSignatureHex + ", received=" + signature, "ERROR");
-      return ContentService.createTextOutput(JSON.stringify({ 
-        error: "Invalid signature",
-        details: "The provided signature does not match the expected value"
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // Log successful authentication
-    // logToSheet("Authentication successful", "INFO");
-  
     // Parse request body
     var params;
     try {
       params = JSON.parse(e.postData.contents);
-      // logToSheet("Request params: " + JSON.stringify(params), "INFO");
+      logToSheet("Request params: " + JSON.stringify(params), "INFO");
     } catch (error) {
-      // logToSheet("Failed to parse request body: " + error.toString(), "ERROR");
+      logToSheet("Failed to parse request body: " + error.toString(), "ERROR");
       return ContentService.createTextOutput(JSON.stringify({ 
         error: "Invalid request body",
         details: "Failed to parse JSON: " + error.toString()
@@ -197,7 +129,7 @@ function doPost(e) {
         };
         break;
       default:
-        // logToSheet("Unknown action: " + params.action, "ERROR");
+        logToSheet("Unknown action: " + params.action, "ERROR");
         response = { 
           error: "Unknown action",
           details: "The action '" + params.action + "' is not supported"
@@ -205,13 +137,13 @@ function doPost(e) {
     }
     
     // Log response
-    // logToSheet("Response: " + JSON.stringify(response), "RESPONSE");
+    logToSheet("Response: " + JSON.stringify(response), "RESPONSE");
     
     return ContentService.createTextOutput(JSON.stringify(response))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     // Catch any unexpected errors
-    // logToSheet("Unexpected error: " + error.toString(), "ERROR");
+    logToSheet("Unexpected error: " + error.toString(), "ERROR");
     return ContentService.createTextOutput(JSON.stringify({ 
       error: "Server error",
       details: error.toString()
@@ -224,7 +156,7 @@ function createFolder(parentFolderId, folderName) {
   try {
     // Validate parameters
     if (!parentFolderId) {
-      // logToSheet("Missing parentFolderId in createFolder", "ERROR");
+      logToSheet("Missing parentFolderId in createFolder", "ERROR");
       return { 
         success: false, 
         error: "Missing parentFolderId parameter"
@@ -232,20 +164,20 @@ function createFolder(parentFolderId, folderName) {
     }
     
     if (!folderName) {
-      // logToSheet("Missing folderName in createFolder", "ERROR");
+      logToSheet("Missing folderName in createFolder", "ERROR");
       return { 
         success: false, 
         error: "Missing folderName parameter"
       };
     }
     
-    // logToSheet("Creating folder: " + folderName + " in parent: " + parentFolderId, "INFO");
+    logToSheet("Creating folder: " + folderName + " in parent: " + parentFolderId, "INFO");
     
     var parentFolder;
     try {
       parentFolder = DriveApp.getFolderById(parentFolderId);
     } catch (e) {
-      // logToSheet("Invalid parentFolderId: " + parentFolderId + ", error: " + e.toString(), "ERROR");
+      logToSheet("Invalid parentFolderId: " + parentFolderId + ", error: " + e.toString(), "ERROR");
       return { 
         success: false, 
         error: "Invalid parentFolderId",
@@ -259,7 +191,7 @@ function createFolder(parentFolderId, folderName) {
     if (existingFolders.hasNext()) {
       var folder = existingFolders.next();
       var folderId = folder.getId();
-      // logToSheet("Folder already exists: " + folderName + ", ID: " + folderId, "INFO");
+      logToSheet("Folder already exists: " + folderName + ", ID: " + folderId, "INFO");
       return { 
         success: true, 
         folderId: folderId,
@@ -270,14 +202,14 @@ function createFolder(parentFolderId, folderName) {
     // Create a new folder
     var newFolder = parentFolder.createFolder(folderName);
     var newFolderId = newFolder.getId();
-    // logToSheet("Folder created successfully: " + folderName + ", ID: " + newFolderId, "INFO");
+    logToSheet("Folder created successfully: " + folderName + ", ID: " + newFolderId, "INFO");
     return { 
       success: true, 
       folderId: newFolderId,
       message: "Folder created successfully"
     };
   } catch (error) {
-    // logToSheet("Error in createFolder: " + error.toString(), "ERROR");
+    logToSheet("Error in createFolder: " + error.toString(), "ERROR");
     return { 
       success: false, 
       error: "Failed to create folder",
@@ -291,7 +223,7 @@ function uploadFile(folderId, fileName, fileContent, mimeType) {
   try {
     // Validate parameters
     if (!folderId) {
-      // logToSheet("Missing folderId in uploadFile", "ERROR");
+      logToSheet("Missing folderId in uploadFile", "ERROR");
       return { 
         success: false, 
         error: "Missing folderId parameter"
@@ -299,7 +231,7 @@ function uploadFile(folderId, fileName, fileContent, mimeType) {
     }
     
     if (!fileName) {
-      // logToSheet("Missing fileName in uploadFile", "ERROR");
+      logToSheet("Missing fileName in uploadFile", "ERROR");
       return { 
         success: false, 
         error: "Missing fileName parameter"
@@ -307,20 +239,20 @@ function uploadFile(folderId, fileName, fileContent, mimeType) {
     }
     
     if (!fileContent) {
-      // logToSheet("Missing fileContent in uploadFile", "ERROR");
+      logToSheet("Missing fileContent in uploadFile", "ERROR");
       return { 
         success: false, 
         error: "Missing fileContent parameter"
       };
     }
     
-    // logToSheet("Uploading file: " + fileName + " to folder: " + folderId, "INFO");
+    logToSheet("Uploading file: " + fileName + " to folder: " + folderId, "INFO");
     
     var folder;
     try {
       folder = DriveApp.getFolderById(folderId);
     } catch (e) {
-      // logToSheet("Invalid folderId: " + folderId + ", error: " + e.toString(), "ERROR");
+      logToSheet("Invalid folderId: " + folderId + ", error: " + e.toString(), "ERROR");
       return { 
         success: false, 
         error: "Invalid folderId",
@@ -332,7 +264,7 @@ function uploadFile(folderId, fileName, fileContent, mimeType) {
     try {
       decodedContent = Utilities.base64Decode(fileContent);
     } catch (e) {
-      // logToSheet("Failed to decode base64 content: " + e.toString(), "ERROR");
+      logToSheet("Failed to decode base64 content: " + e.toString(), "ERROR");
       return { 
         success: false, 
         error: "Invalid base64 content",
@@ -344,14 +276,14 @@ function uploadFile(folderId, fileName, fileContent, mimeType) {
     var file = folder.createFile(blob);
     var fileId = file.getId();
     
-    // logToSheet("File uploaded successfully: " + fileName + ", ID: " + fileId, "INFO");
+    logToSheet("File uploaded successfully: " + fileName + ", ID: " + fileId, "INFO");
     return { 
       success: true, 
       fileId: fileId,
       message: "File uploaded successfully"
     };
   } catch (error) {
-    // logToSheet("Error in uploadFile: " + error.toString(), "ERROR");
+    logToSheet("Error in uploadFile: " + error.toString(), "ERROR");
     return { 
       success: false, 
       error: "Failed to upload file",
@@ -365,7 +297,7 @@ function getFolderByName(parentFolderId, folderName) {
   try {
     // Validate parameters
     if (!parentFolderId) {
-      // logToSheet("Missing parentFolderId in getFolderByName", "ERROR");
+      logToSheet("Missing parentFolderId in getFolderByName", "ERROR");
       return { 
         found: false, 
         error: "Missing parentFolderId parameter"
@@ -373,20 +305,20 @@ function getFolderByName(parentFolderId, folderName) {
     }
     
     if (!folderName) {
-      // logToSheet("Missing folderName in getFolderByName", "ERROR");
+      logToSheet("Missing folderName in getFolderByName", "ERROR");
       return { 
         found: false, 
         error: "Missing folderName parameter"
       };
     }
     
-    // logToSheet("Searching for folder: " + folderName + " in parent: " + parentFolderId, "INFO");
+    logToSheet("Searching for folder: " + folderName + " in parent: " + parentFolderId, "INFO");
     
     var parentFolder;
     try {
       parentFolder = DriveApp.getFolderById(parentFolderId);
     } catch (e) {
-      // logToSheet("Invalid parentFolderId: " + parentFolderId + ", error: " + e.toString(), "ERROR");
+      logToSheet("Invalid parentFolderId: " + parentFolderId + ", error: " + e.toString(), "ERROR");
       return { 
         found: false, 
         error: "Invalid parentFolderId",
@@ -399,19 +331,19 @@ function getFolderByName(parentFolderId, folderName) {
     if (folders.hasNext()) {
       var folder = folders.next();
       var folderId = folder.getId();
-      // logToSheet("Folder found: " + folderName + ", ID: " + folderId, "INFO");
+      logToSheet("Folder found: " + folderName + ", ID: " + folderId, "INFO");
       return { 
         found: true, 
         folderId: folderId
       };
     } else {
-      // logToSheet("Folder not found: " + folderName, "INFO");
+      logToSheet("Folder not found: " + folderName, "INFO");
       return { 
         found: false
       };
     }
   } catch (error) {
-    // logToSheet("Error in getFolderByName: " + error.toString(), "ERROR");
+    logToSheet("Error in getFolderByName: " + error.toString(), "ERROR");
     return { 
       found: false, 
       error: "Failed to search for folder",
@@ -420,6 +352,18 @@ function getFolderByName(parentFolderId, folderName) {
   }
 }
 
+
+// Function to hide specified columns
+function hideSpecifiedColumns(sheet) {
+  // Loop through each column to hide
+  for (const columnName of HIDDEN_COLUMNS) {
+    const colIndex = findColumnByHeader(sheet, columnName);
+    if (colIndex > 0) {
+      sheet.hideColumns(colIndex);
+      logToSheet(`Hidden column: ${columnName} (index: ${colIndex})`, "INFO");
+    }
+  }
+}
 
 // Find column index by header name
 function findColumnByHeader(sheet, headerName) {
@@ -442,7 +386,7 @@ function getOrCreateColumn(sheet, headerName) {
   return colIndex;
 }
 
-// Ensure columns are in the correct order
+// Ensure required columns exist without recreating the sheet
 function ensureColumnOrder(sheet) {
   // Get current headers
   const lastCol = sheet.getLastColumn();
@@ -463,79 +407,34 @@ function ensureColumnOrder(sheet) {
     }
   });
   
-  // Check if all required columns exist and are in the right order
-  let needsReordering = false;
-  let lastFoundIndex = 0;
-  
+  // Check if all required columns exist
+  let missingColumns = [];
   for (const header of COLUMN_ORDER) {
     if (!COLUMN_CONFIG[header]) continue; // Skip disabled columns
     
     const currentIndex = headerMap[header];
     if (!currentIndex) {
-      // Column doesn't exist, will be created later
-      needsReordering = true;
-      break;
+      // Column doesn't exist, add it to missing columns list
+      missingColumns.push(header);
     }
-    
-    if (currentIndex <= lastFoundIndex && lastFoundIndex > 0) {
-      // Column exists but is out of order
-      needsReordering = true;
-      break;
-    }
-    
-    lastFoundIndex = currentIndex;
   }
   
-  if (needsReordering) {
-    // Create a new sheet with the correct order
-    const tempSheetName = "TempExpenses_" + new Date().getTime();
-    const ss = sheet.getParent();
-    const tempSheet = ss.insertSheet(tempSheetName);
+  // Add any missing columns at the end
+  if (missingColumns.length > 0) {
+    logToSheet(`Adding missing columns: ${missingColumns.join(", ")}`, "INFO");
     
-    // Add headers in the correct order
-    const newHeaders = COLUMN_ORDER.filter(header => COLUMN_CONFIG[header]);
-    tempSheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
-    tempSheet.getRange(1, 1, 1, newHeaders.length).setFontWeight("bold");
-    
-    // Copy data if there's any
-    if (sheet.getLastRow() > 1) {
-      // For each row in the original sheet
-      for (let row = 2; row <= sheet.getLastRow(); row++) {
-        const newRowData = [];
-        
-        // For each header in the new order
-        for (const header of newHeaders) {
-          // Check if this is a new header name that was mapped from an old one
-          let oldHeader = header;
-          for (const [oldName, newName] of Object.entries(COLUMN_MAPPING)) {
-            if (newName === header) {
-              oldHeader = oldName;
-              break;
-            }
-          }
-          
-          const oldColIndex = headerMap[header] || findColumnByHeader(sheet, oldHeader);
-          if (oldColIndex) {
-            // Copy data from old column
-            newRowData.push(sheet.getRange(row, oldColIndex).getValue());
-          } else {
-            // New column, no data
-            newRowData.push("");
-          }
-        }
-        
-        // Add row to temp sheet
-        tempSheet.appendRow(newRowData);
-      }
+    // Add each missing column
+    for (const header of missingColumns) {
+      const newColIndex = sheet.getLastColumn() + 1;
+      sheet.getRange(1, newColIndex).setValue(header);
+      sheet.getRange(1, newColIndex).setFontWeight("bold");
+      
+      // Update the header map
+      headerMap[header] = newColIndex;
     }
-    
-    // Delete the old sheet and rename the temp sheet
-    ss.deleteSheet(sheet);
-    tempSheet.setName("Expenses");
-    
-    return tempSheet;
   }
   
+  // Return the same sheet with possibly added columns
   return sheet;
 }
 
@@ -698,14 +597,14 @@ function createExpenseRecord(data) {
   try {
     // Validate parameters
     if (!data) {
-      // logToSheet("Missing data in createExpenseRecord", "ERROR");
+      logToSheet("Missing data in createExpenseRecord", "ERROR");
       return { 
         success: false, 
         error: "Missing data parameter"
       };
     }
     
-    // logToSheet("Creating expense record: " + JSON.stringify(data), "INFO");
+    logToSheet("Creating expense record: " + JSON.stringify(data), "INFO");
     
     // Get the current spreadsheet to which the script is attached
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -725,22 +624,19 @@ function createExpenseRecord(data) {
         // Format headers
         sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold");
         
-        // Hide RecordId column
-        sheet.hideColumns(1);
+        // Hide specified columns
+        hideSpecifiedColumns(sheet);
         
-        // logToSheet("Created new Expenses sheet", "INFO");
+        logToSheet("Created new Expenses sheet", "INFO");
       } else {
-        // Ensure the sheet has the correct column order and headers
+        // Only ensure required columns exist, don't reorder or recreate the sheet
         sheet = ensureColumnOrder(sheet);
         
-        // Hide RecordId column if it exists
-        const recordIdColIndex = findColumnByHeader(sheet, "RecordId");
-        if (recordIdColIndex > 0) {
-          sheet.hideColumns(recordIdColIndex);
-        }
+        // Hide specified columns
+        hideSpecifiedColumns(sheet);
       }
     } catch (e) {
-      // logToSheet("Failed to access or create Expenses sheet: " + e.toString(), "ERROR");
+      logToSheet("Failed to access or create Expenses sheet: " + e.toString(), "ERROR");
       return { 
         success: false, 
         error: "Failed to access or create Expenses sheet",
@@ -793,30 +689,101 @@ function createExpenseRecord(data) {
     if (GENERAL_CONFIG.insertAtTop) {
       // Insert after the header row
       sheet.insertRowAfter(1);
-      const newRowRange = sheet.getRange(2, 1, 1, newRow.length);
-      newRowRange.setValues([newRow]);
       
-      // Reset formatting for the new row
-      newRowRange.setFontWeight("normal");
+      // Get all column headers to preserve custom columns
+      const allHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       
-      // Apply formatting to date and time columns
-      const dateColIndex = findColumnByHeader(sheet, "Date");
-      const timeColIndex = findColumnByHeader(sheet, "Time");
-      
-      if (dateColIndex > 0) {
-        sheet.getRange(2, dateColIndex).setNumberFormat("d mmm yyyy г.");
+      // Create a row with values for all columns
+      const fullRowData = [];
+      for (let i = 0; i < allHeaders.length; i++) {
+        const header = allHeaders[i];
+        if (!header) {
+          fullRowData.push(""); // Empty cell for empty header
+          continue;
+        }
+        
+        // Check if this is a standard column we have data for
+        let value = "";
+        if (header === "RecordId") {
+          value = recordId;
+        } else if (header === "User ID") {
+          value = data.telegram_user_id;
+        } else if (header === "User Name") {
+          value = data.telegram_username;
+        } else if (header === "Amount") {
+          value = data.total_amount;
+        } else if (header === "Currency") {
+          value = data.currency;
+        } else if (header === "Date") {
+          value = data.date;
+        } else if (header === "Time") {
+          value = data.time;
+        } else if (header === "Items") {
+          value = data.items;
+        } else if (header === "Recipt") {
+          value = data.image_url;
+        } else if (header === "Timestamp") {
+          value = timestamp;
+        } else {
+          // For custom columns, leave empty
+          value = "";
+        }
+        
+        fullRowData.push(value);
       }
       
-      if (timeColIndex > 0) {
-        if (GENERAL_CONFIG.use12HourFormat) {
-          sheet.getRange(2, timeColIndex).setNumberFormat("h:mm AM/PM");
-        } else {
-          sheet.getRange(2, timeColIndex).setNumberFormat("HH:mm");
+      // Set the values for the entire row
+      const newRowRange = sheet.getRange(2, 1, 1, fullRowData.length);
+      newRowRange.setValues([fullRowData]);
+      
+      // Preserve existing formatting by copying from row 3 if it exists
+      if (sheet.getLastRow() >= 3) {
+        try {
+          const formatSourceRange = sheet.getRange(3, 1, 1, fullRowData.length);
+          formatSourceRange.copyFormatToRange(sheet, 1, fullRowData.length, 2, 2);
+        } catch (e) {
+          // If copying format fails, apply basic formatting
+          newRowRange.setFontWeight("normal");
+          
+          // Apply formatting to date and time columns
+          const dateColIndex = findColumnByHeader(sheet, "Date");
+          const timeColIndex = findColumnByHeader(sheet, "Time");
+          
+          if (dateColIndex > 0) {
+            sheet.getRange(2, dateColIndex).setNumberFormat("d mmm yyyy г.");
+          }
+          
+          if (timeColIndex > 0) {
+            if (GENERAL_CONFIG.use12HourFormat) {
+              sheet.getRange(2, timeColIndex).setNumberFormat("h:mm AM/PM");
+            } else {
+              sheet.getRange(2, timeColIndex).setNumberFormat("HH:mm");
+            }
+          }
+        }
+      } else {
+        // No existing rows to copy format from, apply basic formatting
+        newRowRange.setFontWeight("normal");
+        
+        // Apply formatting to date and time columns
+        const dateColIndex = findColumnByHeader(sheet, "Date");
+        const timeColIndex = findColumnByHeader(sheet, "Time");
+        
+        if (dateColIndex > 0) {
+          sheet.getRange(2, dateColIndex).setNumberFormat("d mmm yyyy г.");
+        }
+        
+        if (timeColIndex > 0) {
+          if (GENERAL_CONFIG.use12HourFormat) {
+            sheet.getRange(2, timeColIndex).setNumberFormat("h:mm AM/PM");
+          } else {
+            sheet.getRange(2, timeColIndex).setNumberFormat("HH:mm");
+          }
         }
       }
       
       // Return row ID 2 since we inserted at the top, along with recordId, spreadsheetId, and sheetId
-      // logToSheet("Expense record created successfully", "INFO");
+      logToSheet("Expense record created successfully", "INFO");
       return { 
         success: true, 
         message: "Expense record created successfully",
@@ -826,27 +793,95 @@ function createExpenseRecord(data) {
         sheetId: sheetId
       };
     } else {
-      // Append at the bottom (default behavior)
-      sheet.appendRow(newRow);
-      const newRowId = sheet.getLastRow();
+      // For appending at the bottom, we need a similar approach to preserve custom columns
+      // Get all column headers to preserve custom columns
+      const allHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
       
-      // Apply formatting to date and time columns
-      const dateColIndex = findColumnByHeader(sheet, "Date");
-      const timeColIndex = findColumnByHeader(sheet, "Time");
-      
-      if (dateColIndex > 0) {
-        sheet.getRange(newRowId, dateColIndex).setNumberFormat("d mmm yyyy г.");
+      // Create a row with values for all columns
+      const fullRowData = [];
+      for (let i = 0; i < allHeaders.length; i++) {
+        const header = allHeaders[i];
+        if (!header) {
+          fullRowData.push(""); // Empty cell for empty header
+          continue;
+        }
+        
+        // Check if this is a standard column we have data for
+        let value = "";
+        if (header === "RecordId") {
+          value = recordId;
+        } else if (header === "User ID") {
+          value = data.telegram_user_id;
+        } else if (header === "User Name") {
+          value = data.telegram_username;
+        } else if (header === "Amount") {
+          value = data.total_amount;
+        } else if (header === "Currency") {
+          value = data.currency;
+        } else if (header === "Date") {
+          value = data.date;
+        } else if (header === "Time") {
+          value = data.time;
+        } else if (header === "Items") {
+          value = data.items;
+        } else if (header === "Recipt") {
+          value = data.image_url;
+        } else if (header === "Timestamp") {
+          value = timestamp;
+        } else {
+          // For custom columns, leave empty
+          value = "";
+        }
+        
+        fullRowData.push(value);
       }
       
-      if (timeColIndex > 0) {
-        if (GENERAL_CONFIG.use12HourFormat) {
-          sheet.getRange(newRowId, timeColIndex).setNumberFormat("h:mm AM/PM");
-        } else {
-          sheet.getRange(newRowId, timeColIndex).setNumberFormat("HH:mm");
+      // Append the row
+      sheet.appendRow(fullRowData);
+      const newRowId = sheet.getLastRow();
+      
+      // Try to copy formatting from the previous row
+      if (newRowId > 2) {
+        try {
+          const formatSourceRange = sheet.getRange(newRowId - 1, 1, 1, fullRowData.length);
+          formatSourceRange.copyFormatToRange(sheet, 1, fullRowData.length, newRowId, newRowId);
+        } catch (e) {
+          // If copying format fails, apply basic formatting
+          // Apply formatting to date and time columns
+          const dateColIndex = findColumnByHeader(sheet, "Date");
+          const timeColIndex = findColumnByHeader(sheet, "Time");
+          
+          if (dateColIndex > 0) {
+            sheet.getRange(newRowId, dateColIndex).setNumberFormat("d mmm yyyy г.");
+          }
+          
+          if (timeColIndex > 0) {
+            if (GENERAL_CONFIG.use12HourFormat) {
+              sheet.getRange(newRowId, timeColIndex).setNumberFormat("h:mm AM/PM");
+            } else {
+              sheet.getRange(newRowId, timeColIndex).setNumberFormat("HH:mm");
+            }
+          }
+        }
+      } else {
+        // Apply basic formatting
+        const dateColIndex = findColumnByHeader(sheet, "Date");
+        const timeColIndex = findColumnByHeader(sheet, "Time");
+        
+        if (dateColIndex > 0) {
+          sheet.getRange(newRowId, dateColIndex).setNumberFormat("d mmm yyyy г.");
+        }
+        
+        if (timeColIndex > 0) {
+          if (GENERAL_CONFIG.use12HourFormat) {
+            sheet.getRange(newRowId, timeColIndex).setNumberFormat("h:mm AM/PM");
+          } else {
+            sheet.getRange(newRowId, timeColIndex).setNumberFormat("HH:mm");
+          }
         }
       }
       
-      // logToSheet("Expense record created successfully", "INFO");
+      logToSheet("Expense record created successfully", "INFO");
       return { 
         success: true, 
         message: "Expense record created successfully",
@@ -857,7 +892,7 @@ function createExpenseRecord(data) {
       };
     }
   } catch (error) {
-    // logToSheet("Error in createExpenseRecord: " + error.toString(), "ERROR");
+    logToSheet("Error in createExpenseRecord: " + error.toString(), "ERROR");
     return { 
       success: false, 
       error: "Failed to create expense record",

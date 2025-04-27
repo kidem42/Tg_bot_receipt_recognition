@@ -1,4 +1,4 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -8,43 +8,28 @@ from telegram.ext import (
 )
 from modules.receipt_notes import handle_receipt_note, register_receipt_message
 from io import BytesIO
-import time
-import asyncio
 import os
 
-from modules.user_validator import is_user_allowed
+from modules.account_router import is_user_allowed, get_user_group
 from modules.file_processor import get_formatted_filename
 from modules.google_script import get_user_folder_id, upload_file_to_drive
 from modules.openai_client import analyze_image
-from modules.account_router import get_user_group
 from config import MAX_FILE_SIZE
 from config import MAX_PDF_PAGES
 from config import GROUP_MESSAGE_TEMPLATES
+from config import GOOGLE_DRIVE_FOLDER_URL
+from config import MAX_ITEMS_TEXT_LENGTH
 
 # Cache for user folder IDs
 user_folder_cache = {}
 
-# For tracking delayed messages
-batch_trackers = {}
-
-# For tracking files with processing errors
+# For tracking files with processing errors during the current session
 failed_files = {}
-
-# For tracking the processing status of files in a batch
-batch_files = {}
-
-# Maximum file size in bytes (5 MB)
-#MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB in bytes
-
-# Wait time before sending a message (in seconds)
-BATCH_TIMEOUT = 3.0
-
-# URL for direct access to Google Drive folders
-GOOGLE_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/{folder_id}"
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /start command"""
     user_id = update.effective_user.id
+    print(f"Start command received from user_id: {user_id}, type: {type(user_id)}")
     
     if is_user_allowed(user_id):
         await update.message.reply_text(
@@ -140,10 +125,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Sorry, you don't have access to this bot.")
         return
     
-    # Register the file in the tracking system at the beginning of processing
-    folder_id = get_cached_folder_id(user_id, update.effective_user.username or update.effective_user.first_name)
-    file_id = await register_file(update, context, user_id, folder_id)
-    
     # Get user information
     username = update.effective_user.username or update.effective_user.first_name
     
@@ -224,6 +205,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # Send message about successful analysis
                         items_text = receipt_data.get('items', 'Not recognized')
                         
+                        # Truncate items text for display in message if it's too long
+                        display_items_text = items_text
+                        if items_text is not None and len(items_text) > MAX_ITEMS_TEXT_LENGTH:
+                            display_items_text = items_text[:MAX_ITEMS_TEXT_LENGTH] + "..."
+                        
                         # Get user group and check for template
                         user_group = get_user_group(user_id)
                         template = None
@@ -236,13 +222,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
                             #f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
                             f"📅 Date: {receipt_data.get('date')}\n"
-                            f"🕓 Time: {receipt_data.get('time')}\n"
-                            f"🛒 Items: {items_text}"
+                            #f"🕓 Time: {receipt_data.get('time')}\n"
+                            f"🛒 Items: {display_items_text}"
                         )
                         
                         # Add template if it exists
                         if template:
-                            message_text += f"\n\n{template}"
+                            # Create folder URL for template
+                            folder_url = GOOGLE_DRIVE_FOLDER_URL.format(folder_id=folder_id)
+                            
+                            # Replace placeholders in template
+                            formatted_template = template.format(folder_url=folder_url)
+                            
+                            message_text += f"\n\n{formatted_template}"
                         
                         # Send the message with Markdown formatting if template exists
                         if template:
@@ -300,13 +292,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             print(f"Error analyzing image: {str(e)}")
             
-            # Add file to the list of files with errors
-            user_key = str(user_id)
-            if user_key not in failed_files:
-                failed_files[user_key] = []
-            
-            failed_files[user_key].append(original_filename)
-            
             await update.message.reply_text(
                 f"⚠️ An error occurred while analyzing the image '{original_filename}'. "
                 f"The file was uploaded to the drive but not processed. Please try sending it again."
@@ -315,79 +300,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Clean up temporary files
             from modules.img_converter import clear_temp_files
             clear_temp_files()
-    
-    # Mark file as processed
-    user_key = str(user_id)
-    if user_key in batch_files and file_id in batch_files[user_key]:
-        batch_files[user_key][file_id]['status'] = 'completed'
-        
-    # Start timer for sending batch completion notification
-    if user_key in batch_trackers:
-        # If previous task is still active, cancel it
-        if batch_trackers[user_key]['task'] and not batch_trackers[user_key]['task'].done():
-            batch_trackers[user_key]['task'].cancel()
-        
-        # Create a new task for sending notification
-        task = asyncio.create_task(
-            send_batch_complete(context, user_key)
-        )
-        batch_trackers[user_key]['task'] = task
-
-async def register_file(update, context, user_id, folder_id):
-    """
-    Registers a file in the tracking system without starting the notification timer
-    
-    Args:
-        update: Telegram Update object
-        context: Bot context
-        user_id: User ID
-        folder_id: ID of the folder where files are uploaded
-        
-    Returns:
-        str: File ID for tracking processing status
-    """
-    user_key = str(user_id)
-    current_time = time.time()
-    message_id = update.message.message_id
-    file_id = f"{user_key}_{message_id}"
-    
-    # Register file in tracking structure
-    if user_key not in batch_files:
-        batch_files[user_key] = {}
-    
-    # Add file to the list of processing files
-    batch_files[user_key][file_id] = {
-        'status': 'processing',
-        'timestamp': current_time
-    }
-    
-    # Create or update tracker for user
-    if user_key not in batch_trackers:
-        # First user upload - create a new tracker
-        batch_trackers[user_key] = {
-            'count': 1,
-            'last_update': current_time,
-            'chat_id': update.effective_chat.id,
-            'folder_id': folder_id,  # Save folder ID
-            'task': None,
-            'pending_files': [file_id]
-        }
-    else:
-        # Tracker already exists - update counter and last update time
-        tracker = batch_trackers[user_key]
-        
-        # Update tracker
-        tracker['count'] += 1
-        tracker['last_update'] = current_time
-        tracker['folder_id'] = folder_id  # Update folder ID (just in case something changed)
-        
-        # Add file to the list of pending files
-        if 'pending_files' not in tracker:
-            tracker['pending_files'] = []
-        tracker['pending_files'].append(file_id)
-    
-    # Return file ID for subsequent status updates
-    return file_id
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for documents"""
@@ -396,10 +308,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_user_allowed(user_id):
         await update.message.reply_text("Sorry, you don't have access to this bot.")
         return
-    
-    # Register the file in the tracking system at the beginning of processing
-    folder_id = get_cached_folder_id(user_id, update.effective_user.username or update.effective_user.first_name)
-    file_id = await register_file(update, context, user_id, folder_id)
     
     # Get user information
     username = update.effective_user.username or update.effective_user.first_name
@@ -554,6 +462,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     # Send message about successful analysis
                     items_text = receipt_data.get('items', 'Not recognized')
+                    
+                    # Truncate items text for display in message if it's too long
+                    display_items_text = items_text
+                    if items_text is not None and len(items_text) > MAX_ITEMS_TEXT_LENGTH:
+                        display_items_text = items_text[:MAX_ITEMS_TEXT_LENGTH] + "..."
                     # Determine file type for message
                     file_type = "PDF document" if mime_type == "application/pdf" else "Image"
                     
@@ -569,13 +482,19 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"💰 Amount: {receipt_data.get('total_amount')} {receipt_data.get('currency')}\n"
                         #f"💸 Taxes: {receipt_data.get('tax_amount')} {receipt_data.get('currency')}\n"
                         f"📅 Date: {receipt_data.get('date')}\n"
-                        f"🕓 Time: {receipt_data.get('time')}\n"
-                        f"🛒 Items: {items_text}"
+                        #f"🕓 Time: {receipt_data.get('time')}\n"
+                        f"🛒 Items: {display_items_text}"
                     )
                     
                     # Add template if it exists
                     if template:
-                        message_text += f"\n\n{template}"
+                        # Create folder URL for template
+                        folder_url = GOOGLE_DRIVE_FOLDER_URL.format(folder_id=folder_id)
+                        
+                        # Replace placeholders in template
+                        formatted_template = template.format(folder_url=folder_url)
+                        
+                        message_text += f"\n\n{formatted_template}"
                     
                     # Send the message with Markdown formatting if template exists
                     if template:
@@ -627,13 +546,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             print(f"Error processing PDF: {str(e)}")
             
-            # Add file to the list of files with errors
-            user_key = str(user_id)
-            if user_key not in failed_files:
-                failed_files[user_key] = []
-            
-            failed_files[user_key].append(original_filename)
-            
             # Determine file type for error message
             file_type = "PDF document" if mime_type == "application/pdf" else "image"
             
@@ -649,165 +561,6 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 from modules.img_converter import clear_temp_files
                 clear_temp_files()
-    
-    # Mark file as processed
-    user_key = str(user_id)
-    if user_key in batch_files and file_id in batch_files[user_key]:
-        batch_files[user_key][file_id]['status'] = 'completed'
-        
-    # Start timer for sending batch completion notification
-    if user_key in batch_trackers:
-        # If previous task is still active, cancel it
-        if batch_trackers[user_key]['task'] and not batch_trackers[user_key]['task'].done():
-            batch_trackers[user_key]['task'].cancel()
-        
-        # Create a new task for sending notification
-        task = asyncio.create_task(
-            send_batch_complete(context, user_key)
-        )
-        batch_trackers[user_key]['task'] = task
-
-async def track_upload(update, context, user_id, folder_id):
-    """
-    Tracks file uploads and groups them into batches
-    for sending a single notification
-    
-    Args:
-        update: Telegram Update object
-        context: Bot context
-        user_id: User ID
-        folder_id: ID of the folder where files are uploaded
-        
-    Returns:
-        str: File ID for tracking processing status
-    """
-    user_key = str(user_id)
-    current_time = time.time()
-    message_id = update.message.message_id
-    file_id = f"{user_key}_{message_id}"
-    
-    # Register file in tracking structure
-    if user_key not in batch_files:
-        batch_files[user_key] = {}
-    
-    # Add file to the list of processing files
-    batch_files[user_key][file_id] = {
-        'status': 'processing',
-        'timestamp': current_time
-    }
-    
-    # Create or update tracker for user
-    if user_key not in batch_trackers:
-        # First user upload - create a new tracker
-        batch_trackers[user_key] = {
-            'count': 1,
-            'last_update': current_time,
-            'chat_id': update.effective_chat.id,
-            'folder_id': folder_id,  # Save folder ID
-            'task': None,
-            'pending_files': [file_id]
-        }
-    else:
-        # Tracker already exists - update counter and last update time
-        tracker = batch_trackers[user_key]
-        
-        # If previous task is still active, cancel it
-        if tracker['task'] and not tracker['task'].done():
-            tracker['task'].cancel()
-        
-        # Update tracker
-        tracker['count'] += 1
-        tracker['last_update'] = current_time
-        tracker['folder_id'] = folder_id  # Update folder ID (just in case something changed)
-        
-        # Add file to the list of pending files
-        if 'pending_files' not in tracker:
-            tracker['pending_files'] = []
-        tracker['pending_files'].append(file_id)
-    
-    # Create a new task for sending notification
-    task = asyncio.create_task(
-        send_batch_complete(context, user_key)
-    )
-    batch_trackers[user_key]['task'] = task
-    
-    # Return file ID for subsequent status updates
-    return file_id
-
-async def send_batch_complete(context, user_key):
-    """
-    Sends a notification about the completion of a batch file upload
-    after the timeout expires and all files are processed
-    """
-    # Wait the specified time before sending notification
-    await asyncio.sleep(BATCH_TIMEOUT)
-    
-    # Make sure the tracker still exists
-    if user_key in batch_trackers:
-        tracker = batch_trackers[user_key]
-        
-        # Check if all files in the batch are processed
-        all_files_processed = True
-        if 'pending_files' in tracker and tracker['pending_files']:
-            for file_id in tracker['pending_files']:
-                # Check file status
-                if user_key in batch_files and file_id in batch_files[user_key]:
-                    if batch_files[user_key][file_id]['status'] != 'completed':
-                        all_files_processed = False
-                        break
-        
-        # If not all files are processed, delay sending the message
-        if not all_files_processed:
-            # Create a new task for rechecking after 1 second
-            task = asyncio.create_task(
-                send_batch_complete(context, user_key)
-            )
-            batch_trackers[user_key]['task'] = task
-            return
-        
-        # All files processed, send message
-        count = tracker['count']
-        chat_id = tracker['chat_id']
-        folder_id = tracker['folder_id']
-        
-        # Form Google Drive folder URL
-        folder_url = GOOGLE_DRIVE_FOLDER_URL.format(folder_id=folder_id)
-        
-        # Create keyboard with button to open folder
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Open folder", url=folder_url)]
-        ])
-        
-        # Form message
-        message = (
-            f"📤 Upload complete!\n\n"
-            f"✅ Successfully uploaded: {count} file(s)"
-        )
-        
-        # Check if there are files with processing errors
-        if user_key in failed_files and failed_files[user_key]:
-            failed_count = len(failed_files[user_key])
-            failed_list = ", ".join(failed_files[user_key])
-            
-            message += f"\n\n⚠️ {failed_count} file(s) could not be processed: {failed_list}"
-            message += "\nFiles were uploaded to the drive but not processed. Please try sending them again."
-            
-            # Clear the list of error files for this user
-            failed_files[user_key] = []
-        
-        # Send message with keyboard
-        await context.bot.send_message(
-            chat_id=chat_id, 
-            text=message,
-            reply_markup=keyboard
-        )
-        
-        # Clear user file data
-        if user_key in batch_files:
-            del batch_files[user_key]
-        
-        # Delete tracker
-        del batch_trackers[user_key]
 
 def setup_handlers(application):
     """Sets up all the handlers for the Telegram bot"""

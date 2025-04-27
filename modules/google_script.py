@@ -1,10 +1,7 @@
 import requests
 import json
-import time
-import hashlib
 import logging
 from modules.account_router import get_script_url, get_main_folder_id
-from config import GOOGLE_SCRIPT_API_KEY
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, 
@@ -32,36 +29,20 @@ def create_user_folder(user_id, username):
         print(f"Failed to get script URL or root folder ID for user {user_id}")
         return None
     
-    payload = {
-        "action": "createFolder",
-        "parentFolderId": parent_folder_id,
-        "folderName": folder_name
-    }
-    
     try:
-        # Generate timestamp and signature for security
-        timestamp = int(time.time())
-        signature = hashlib.sha256(f"{GOOGLE_SCRIPT_API_KEY}{timestamp}".encode()).hexdigest()
-        
-        # Add security headers
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": GOOGLE_SCRIPT_API_KEY,
-            "X-Timestamp": str(timestamp),
-            "X-Signature": signature
+        payload = {
+            "action": "createFolder",
+            "parentFolderId": parent_folder_id,
+            "folderName": folder_name
         }
         
         # Log request details
         logger.info(f"Making request to: {script_url}")
-        logger.info(f"Headers: X-API-Key: {headers['X-API-Key'][:5]}..., X-Timestamp: {headers['X-Timestamp']}, X-Signature: {headers['X-Signature'][:10]}...")
         logger.info(f"Payload: {payload}")
         
-        # Add headers to URL as query parameters
-        url_with_params = f"{script_url}?X-API-Key={headers['X-API-Key']}&X-Timestamp={headers['X-Timestamp']}&X-Signature={headers['X-Signature']}"
-        logger.info(f"URL with params: {url_with_params[:50]}...")
-        
+        # Make the request without security headers
         response = requests.post(
-            url_with_params,
+            script_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"}
         )
@@ -122,38 +103,22 @@ def upload_file_to_drive(file_content, file_name, folder_id, mime_type, user_id=
         print(f"Failed to get script URL for user {user_id}")
         return None
     
-    payload = {
-        "action": "uploadFile",
-        "folderId": folder_id,
-        "fileName": file_name,
-        "fileContent": encoded_content,
-        "mimeType": mime_type
-    }
-    
     try:
-        # Generate timestamp and signature for security
-        timestamp = int(time.time())
-        signature = hashlib.sha256(f"{GOOGLE_SCRIPT_API_KEY}{timestamp}".encode()).hexdigest()
-        
-        # Add security headers
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": GOOGLE_SCRIPT_API_KEY,
-            "X-Timestamp": str(timestamp),
-            "X-Signature": signature
+        payload = {
+            "action": "uploadFile",
+            "folderId": folder_id,
+            "fileName": file_name,
+            "fileContent": encoded_content,
+            "mimeType": mime_type
         }
         
         # Log request details
         logger.info(f"Making request to: {script_url}")
-        logger.info(f"Headers: X-API-Key: {headers['X-API-Key'][:5]}..., X-Timestamp: {headers['X-Timestamp']}, X-Signature: {headers['X-Signature'][:10]}...")
         logger.info(f"Payload action: {payload['action']}, fileName: {payload['fileName']}")
         
-        # Add headers to URL as query parameters
-        url_with_params = f"{script_url}?X-API-Key={headers['X-API-Key']}&X-Timestamp={headers['X-Timestamp']}&X-Signature={headers['X-Signature']}"
-        logger.info(f"URL with params: {url_with_params[:50]}...")
-        
+        # Make the request without security headers
         response = requests.post(
-            url_with_params,
+            script_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"}
         )
@@ -209,36 +174,20 @@ def get_user_folder_id(user_id, username):
         print(f"Failed to get script URL or root folder ID for user {user_id}")
         return None
     
-    payload = {
-        "action": "getFolderByName",
-        "parentFolderId": parent_folder_id,
-        "folderName": folder_name
-    }
-    
     try:
-        # Generate timestamp and signature for security
-        timestamp = int(time.time())
-        signature = hashlib.sha256(f"{GOOGLE_SCRIPT_API_KEY}{timestamp}".encode()).hexdigest()
-        
-        # Add security headers
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": GOOGLE_SCRIPT_API_KEY,
-            "X-Timestamp": str(timestamp),
-            "X-Signature": signature
+        payload = {
+            "action": "getFolderByName",
+            "parentFolderId": parent_folder_id,
+            "folderName": folder_name
         }
         
         # Log request details
         logger.info(f"Making request to: {script_url}")
-        logger.info(f"Headers: X-API-Key: {headers['X-API-Key'][:5]}..., X-Timestamp: {headers['X-Timestamp']}, X-Signature: {headers['X-Signature'][:10]}...")
         logger.info(f"Payload: {payload}")
         
-        # Add headers to URL as query parameters
-        url_with_params = f"{script_url}?X-API-Key={headers['X-API-Key']}&X-Timestamp={headers['X-Timestamp']}&X-Signature={headers['X-Signature']}"
-        logger.info(f"URL with params: {url_with_params[:50]}...")
-        
+        # Make the request without security headers
         response = requests.post(
-            url_with_params,
+            script_url,
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"}
         )
@@ -277,75 +226,4 @@ def get_user_folder_id(user_id, username):
         logger.error(f"Exception when searching for folder: {str(e)}")
         return create_user_folder(user_id, username)
 
-def test_api_connection(user_id):
-    """
-    Tests the connection to the Google Apps Script API.
-    
-    Args:
-        user_id (int): Telegram user ID
-        
-    Returns:
-        bool: True if connection is successful, False otherwise
-    """
-    # Get script URL for this user
-    script_url = get_script_url(user_id)
-    
-    if not script_url:
-        logger.error(f"Failed to get script URL for user {user_id}")
-        return False
-    
-    # Simple test payload
-    payload = {
-        "action": "test"
-    }
-    
-    try:
-        # Generate timestamp and signature for security
-        timestamp = int(time.time())
-        signature = hashlib.sha256(f"{GOOGLE_SCRIPT_API_KEY}{timestamp}".encode()).hexdigest()
-        
-        # Add security headers
-        headers = {
-            "Content-Type": "application/json",
-            "X-API-Key": GOOGLE_SCRIPT_API_KEY,
-            "X-Timestamp": str(timestamp),
-            "X-Signature": signature
-        }
-        
-        # Log request details
-        logger.info(f"Testing API connection to: {script_url}")
-        logger.info(f"Headers: X-API-Key: {headers['X-API-Key'][:5]}..., X-Timestamp: {headers['X-Timestamp']}, X-Signature: {headers['X-Signature'][:10]}...")
-        
-        # Add headers to URL as query parameters
-        url_with_params = f"{script_url}?X-API-Key={headers['X-API-Key']}&X-Timestamp={headers['X-Timestamp']}&X-Signature={headers['X-Signature']}"
-        logger.info(f"URL with params: {url_with_params[:50]}...")
-        
-        response = requests.post(
-            url_with_params,
-            data=json.dumps(payload),
-            headers={"Content-Type": "application/json"}
-        )
-        
-        # Log response details
-        logger.info(f"Test response status code: {response.status_code}")
-        logger.info(f"Test response content: {response.text}")
-        
-        if response.status_code == 200:
-            try:
-                result = response.json()
-                if 'error' in result:
-                    logger.error(f"API test returned error: {result['error']}")
-                    return False
-                
-                logger.info(f"API connection test successful")
-                return True
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response in test: {e}")
-                logger.error(f"Raw response: {response.text}")
-                return False
-        else:
-            logger.error(f"Error testing API connection: {response.status_code}, {response.text}")
-            return False
-    except Exception as e:
-        logger.error(f"Exception when testing API connection: {str(e)}")
-        return False
+# test_api_connection function removed - no longer needed after API security removal

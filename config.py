@@ -4,24 +4,28 @@ from dotenv import load_dotenv
 # Loading variables from .env file
 load_dotenv()
 
+# Debug output for environment variables
+print(f"ALLOWED_USERS_0 from env: {os.getenv('ALLOWED_USERS_0')}")
+
 # User groups for routing
 ALLOWED_USERS_0 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_0", "").split(",") if id.strip()]  # First user group
-ALLOWED_USERS_1 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_1", "").split(",") if id.strip()]  # Second user group
+print(f"Parsed ALLOWED_USERS_0: {ALLOWED_USERS_0}")
+#ALLOWED_USERS_1 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_1", "").split(",") if id.strip()]  # Second user group
 #ALLOWED_USERS_2 = [int(id.strip()) for id in os.getenv("ALLOWED_USERS_2", "").split(",") if id.strip()]  # Third user group
 
 # Main settings - Root folder IDs on Google Drive
 MAIN_FOLDER_ID_0 = os.getenv("MAIN_FOLDER_ID_0")  # Root folder ID for group 0
-MAIN_FOLDER_ID_1 = os.getenv("MAIN_FOLDER_ID_1")  # Root folder ID for group 1
+#MAIN_FOLDER_ID_1 = os.getenv("MAIN_FOLDER_ID_1")  # Root folder ID for group 1
 #MAIN_FOLDER_ID_2 = os.getenv("MAIN_FOLDER_ID_2")  # Root folder ID for group 2
 
 # API keys
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-GOOGLE_SCRIPT_API_KEY = os.getenv("GOOGLE_SCRIPT_API_KEY")
+# GOOGLE_SCRIPT_API_KEY removed - API security disabled
 
 # Google Script URLs for different groups
 GOOGLE_SCRIPT_URL_0 = os.getenv("GOOGLE_SCRIPT_URL_0")  # URL for group 0
-GOOGLE_SCRIPT_URL_1 = os.getenv("GOOGLE_SCRIPT_URL_1")  # URL for group 1
+#GOOGLE_SCRIPT_URL_1 = os.getenv("GOOGLE_SCRIPT_URL_1")  # URL for group 1
 #GOOGLE_SCRIPT_URL_2 = os.getenv("GOOGLE_SCRIPT_URL_2")  # URL for group 2
 
 MAX_PDF_PAGES = 5  # Maximum number of PDF pages to analyze in one request
@@ -75,15 +79,24 @@ MESSAGES_TRACKING_FILE = "receipt_messages.json"  # Path to temporary file
 MAX_RECORD_AGE = 14 * 24 * 60 * 60  # Maximum time to keep records (14 days in seconds)
 CLEANUP_INTERVAL = 3 * 24 * 60 * 60  # Cleanup check interval (3 days in seconds)
 
+# Google Drive folder URL format
+GOOGLE_DRIVE_FOLDER_URL = "https://drive.google.com/drive/folders/{folder_id}"
+
+# Maximum length of items text in Telegram messages
+MAX_ITEMS_TEXT_LENGTH = 30
+
 # Message templates for specific user groups
+# Available placeholders:
+# {folder_url} - URL to the folder in Google Drive
 GROUP_MESSAGE_TEMPLATES = {
     # Group 0 template
     0: """
 *IMPORTANT!*
 Reply to this message to add Notes. 
 Use "*REP*" for company spent reporting, and "*MY*" for reimbursement
+[Folder]({folder_url})
 """,
     # Group 1 template - can be None or different message
-    1: None,
+    #1: None,
     # Add more group templates as needed
 }

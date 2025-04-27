@@ -177,24 +177,6 @@ MAIN_FOLDER_ID_0=your_folder_id_for_group_0
 3. From the sharing link, extract the folder ID (the part after `/folders/` in the URL)
 4. Add this folder ID as `MAIN_FOLDER_ID_0` in your `.env` file
 
-### Testing the Setup
-
-1. Run the test script to verify Google API connection:
-```bash
-python test_google_api.py <your_telegram_user_id> <your_telegram_username>
-```
-
-2. If everything is working correctly, you should see "All tests completed successfully!"
-
-### Running the Bot
-
-1. Start the bot:
-```bash
-python main.py
-```
-
-2. Send a message to your bot on Telegram, it should respond with a welcome message if you're in the allowed users list
-
 ## Usage
 
 - Send a photo of a receipt directly to the bot

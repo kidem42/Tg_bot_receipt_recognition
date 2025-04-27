@@ -102,7 +102,7 @@ The Telegram Receipt Bot is a Telegram bot that allows users to upload receipts 
 
 1. Clone the repository
 ```bash
-git clone https://github.com/yourusername/telegram-receipt-bot.git
+git clone https://github.com/kidem42/Tg_bot_receipt_recognition.git
 cd telegram-receipt-bot
 ```
 

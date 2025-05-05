@@ -4,9 +4,37 @@
 const GENERAL_CONFIG = {
   "insertAtTop": true,  // Set to true to insert new records at the top, false to insert at the bottom
   "use12HourFormat": true,  // Set to true for AM/PM format, false for 24-hour format
-  "enableLogging": false  // Set to true to enable logging to the Logs sheet, false to disable
+  "enableLogging": false,  // Set to true to enable logging to the Logs sheet, false to disable
+  "enableCommentParsing": true  // Set to true to enable parsing triggers from comments
 };
 
+// Trigger words configuration
+const TRIGGER_CONFIG = {
+  "triggerMappings": {
+    "MY": "Personal",
+    "my": "Personal",
+    "REP": "Company",
+    "rep": "Company"
+  },
+  "separator": ", "  // Separator for multiple triggers in the Trigger column
+};
+
+/// Column order definition
+const COLUMN_ORDER = [
+  "RecordId",
+  "Date",
+  "Time",
+  "Items",
+  "Amount",
+  "Currency",
+  "Amount in USD",
+  "Recipt",
+  "Notes",
+  "Type",
+  "User ID",
+  "User Name",
+  "Timestamp"
+];
 
 // Column configuration (enable/disable columns)
 const COLUMN_CONFIG = {
@@ -19,6 +47,7 @@ const COLUMN_CONFIG = {
   "Amount in USD": true,
   "Recipt": true,
   "Notes": true,
+  "Type": true,  // Changed from Trigger to Type
   "User ID": true,
   "User Name": true,
   "Timestamp": true
@@ -31,21 +60,6 @@ const HIDDEN_COLUMNS = [
   // Add more columns to hide as needed
 ];
 
-/// Column order definition
-const COLUMN_ORDER = [
-  "RecordId",  // Added RecordId as the first column
-  "Date",
-  "Time",
-  "Items",
-  "Amount",
-  "Currency",
-  "Amount in USD",
-  "Recipt",
-  "Notes",
-  "User ID",
-  "User Name",
-  "Timestamp"
-];
 
 // Column mapping from old to new names
 const COLUMN_MAPPING = {
@@ -485,6 +499,36 @@ function updateReceiptNote(params) {
   }
 }
 
+// Function to parse triggers from comment
+function parseTriggersFromComment(comment) {
+  if (!GENERAL_CONFIG.enableCommentParsing) {
+    return {
+      triggers: "",
+      cleanComment: comment
+    };
+  }
+
+  const foundTriggers = new Set(); // Using Set to avoid duplicates
+  let cleanComment = comment;
+
+  // Find all trigger words in the comment and map them to their values
+  Object.entries(TRIGGER_CONFIG.triggerMappings).forEach(([trigger, value]) => {
+    const regex = new RegExp(`\\b${trigger}\\b`, 'g');
+    if (regex.test(cleanComment)) {
+      foundTriggers.add(value); // Add the mapped value instead of the trigger word
+      cleanComment = cleanComment.replace(regex, '').trim();
+    }
+  });
+
+  // Clean up multiple spaces that might have been created
+  cleanComment = cleanComment.replace(/\s+/g, ' ').trim();
+
+  return {
+    triggers: Array.from(foundTriggers).join(TRIGGER_CONFIG.separator),
+    cleanComment: cleanComment
+  };
+}
+
 // Function to update receipt note by record ID
 function updateReceiptNoteByRecordId(params) {
   try {
@@ -545,9 +589,10 @@ function updateReceiptNoteByRecordId(params) {
       }
     }
     
-    // Find RecordId and Notes columns
+    // Find RecordId, Notes, and Type columns
     let recordIdColIndex = findColumnByHeader(sheet, "RecordId");
     let notesColIndex = getOrCreateColumn(sheet, "Notes");
+    let typeColIndex = getOrCreateColumn(sheet, "Type");
     
     if (recordIdColIndex === 0) {
       return { 
@@ -576,12 +621,18 @@ function updateReceiptNoteByRecordId(params) {
       };
     }
     
-    // Update the note
-    sheet.getRange(rowIndex, notesColIndex).setValue(params.note);
+    // Parse the comment for triggers
+    const { triggers, cleanComment } = parseTriggersFromComment(params.note);
+    
+    // Update the note and type columns
+    sheet.getRange(rowIndex, notesColIndex).setValue(cleanComment);
+    if (GENERAL_CONFIG.enableCommentParsing) {
+      sheet.getRange(rowIndex, typeColIndex).setValue(triggers);
+    }
     
     return { 
       success: true, 
-      message: "Note updated successfully"
+      message: "Note and triggers updated successfully"
     };
   } catch (error) {
     return { 
@@ -645,7 +696,7 @@ function createExpenseRecord(data) {
     }
     
     // Get current timestamp
-    var timestamp = new Date().toISOString();
+    var timestamp = new Date();
     
     // Generate UUID for the record
     const recordId = Utilities.getUuid();
@@ -670,7 +721,9 @@ function createExpenseRecord(data) {
     if (COLUMN_CONFIG["Items"]) rowData["Items"] = data.items;
     if (COLUMN_CONFIG["Recipt"]) rowData["Recipt"] = data.image_url;
     if (COLUMN_CONFIG["Timestamp"]) rowData["Timestamp"] = timestamp;
-    
+    if (COLUMN_CONFIG["Notes"]) rowData["Notes"] = "";  // Initialize empty notes
+    if (COLUMN_CONFIG["Type"]) rowData["Type"] = "";  // Initialize empty type
+
     // Create a new row
     var newRow = [];
     
